@@ -75,20 +75,53 @@ export default function Home() {
   };
 
   const handleDownload = async (imageUrl: string, idx: number) => {
+    const filename = `${topic.replace(/\s+/g, '_').toLowerCase()}_thumbnail_${idx + 1}.png`;
     try {
-      const res = await fetch(imageUrl);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${topic.replace(/\s+/g, '_').toLowerCase()}_thumbnail_${idx + 1}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-      showToast('✅ Downloaded!');
-    } catch {
-      window.open(imageUrl, '_blank');
-      showToast('Opened in new tab');
+      // Try blob download first (works with same-origin)
+      const res = await fetch(imageUrl, { mode: 'cors' });
+      if (res.ok) {
+        const blob = await res.blob();
+        // Convert to PNG if needed
+        const pngBlob = new Blob([blob], { type: 'image/png' });
+        const url = URL.createObjectURL(pngBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+        showToast('✅ Downloaded!');
+        return;
+      }
+      throw new Error('Fetch failed');
+    } catch (_e1) {
+      // Fallback: open image in new tab with download attribute via data URL
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = imageUrl;
+        await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); }, 100);
+        showToast('✅ Downloaded!');
+      } catch (_e2) {
+        // Last resort: open in new tab
+        window.open(imageUrl, '_blank');
+        showToast('Right-click image → Save as PNG');
+      }
     }
   };
 
@@ -100,7 +133,7 @@ export default function Home() {
         new ClipboardItem({ [blob.type]: blob })
       ]);
       showToast('✅ Image copied!');
-    } catch {
+    } catch (_e3) {
       await navigator.clipboard.writeText(imageUrl);
       showToast('✅ URL copied!');
     }

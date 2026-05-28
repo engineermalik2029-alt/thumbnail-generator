@@ -5,15 +5,21 @@ import { useState } from 'react';
 interface GenerateResponse {
   imageUrl: string;
   prompt: string;
+  topic: string;
   error?: string;
 }
 
 export default function Home() {
   const [topic, setTopic] = useState('');
-  const [model, setModel] = useState<'dalle3' | 'stable-diffusion'>('dalle3');
+  const [model, setModel] = useState<'flux' | 'flux-realism'>('flux');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
-  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 2000);
+  };
 
   const handleGenerate = async () => {
     if (!topic.trim()) return;
@@ -29,28 +35,38 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error || 'Generation failed');
       setResult(data);
     } catch (e: any) {
-      setResult({ imageUrl: '', prompt: '', error: e.message });
+      setResult({ imageUrl: '', prompt: '', topic: '', error: e.message });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopy = async () => {
+  const handleCopyPrompt = async () => {
     if (result?.prompt) {
       await navigator.clipboard.writeText(result.prompt);
-      setToastVisible(true);
-      setTimeout(() => setToastVisible(false), 2000);
+      showToast('Prompt copied!');
     }
   };
 
-  const handleDownload = () => {
-    if (result?.imageUrl) {
-      const link = document.createElement('a');
-      link.href = result.imageUrl;
-      link.download = `${topic.replace(/\s+/g, '_')}_thumbnail.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+  const handleDownload = async () => {
+    if (!result?.imageUrl) return;
+    try {
+      const response = await fetch(result.imageUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${topic.replace(/\s+/g, '_').toLowerCase()}_thumbnail.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+      showToast('Download started!');
+    } catch (e) {
+      window.open(result.imageUrl, '_blank');
+      showToast('Open in new tab. Right-click to save.');
     }
   };
 
@@ -62,23 +78,18 @@ export default function Home() {
 
   return (
     <>
-      {/* Header */}
       <div className="header">
         <div className="header-badge">
           <span className="dot" />
           AI-Powered
         </div>
-        <h1 className="header-title">
-          Thumbnail Generator
-        </h1>
+        <h1 className="header-title">Thumbnail Generator</h1>
         <p className="header-subtitle">
-          Create stunning YouTube thumbnails with AI — powered by DALL·E 3 and Stable Diffusion
+          Professional YouTube thumbnails designed by AI — with bold text overlays, cinematic lighting, and click-worthy compositions
         </p>
       </div>
 
-      {/* Main Card */}
       <div className="card">
-        {/* Topic Input */}
         <div className="form-group">
           <label className="form-label">Video Topic</label>
           <div className="input-wrapper">
@@ -94,27 +105,21 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Model Select */}
         <div className="form-group">
-          <label className="form-label">AI Model</label>
+          <label className="form-label">Style</label>
           <div className="select-wrapper">
-            <span className="input-icon">🤖</span>
+            <span className="input-icon">🎨</span>
             <select
               value={model}
               onChange={(e) => setModel(e.target.value as any)}
               className="select-field"
             >
-              <option value="dalle3">
-                🎨 DALL·E 3 — Best for creative & detailed designs
-              </option>
-              <option value="stable-diffusion">
-                ⚡ Stable Diffusion XL — Fast & realistic renders
-              </option>
+              <option value="flux">🎨 Creative & Bold — Colorful, dramatic, eye-catching (best for most thumbnails)</option>
+              <option value="flux-realism">📸 Photorealistic — Realistic scenes, cinematic lighting, professional look</option>
             </select>
           </div>
         </div>
 
-        {/* Generate Button */}
         <button
           onClick={handleGenerate}
           disabled={loading || !topic.trim()}
@@ -123,71 +128,64 @@ export default function Home() {
           {loading ? (
             <>
               <span className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
-              Generating...
+              Generating Professional Thumbnail...
             </>
           ) : (
             <>
               <span>✨</span>
-              Generate Thumbnail
+              Generate Professional Thumbnail
             </>
           )}
         </button>
 
-        {/* Loading State */}
         {loading && (
           <div className="loading-container">
-            <div className="loading-text">Crafting your thumbnail with AI...</div>
+            <div className="loading-text">🎨 Designing your thumbnail with topic text & professional effects...</div>
             <div className="loading-bar-container">
               <div className="loading-bar" />
             </div>
           </div>
         )}
 
-        {/* Result */}
         {result && result.imageUrl && (
           <div className="result-section">
-            <p className="result-label">Generated Thumbnail</p>
+            <p className="result-label">🎯 Generated Thumbnail</p>
 
-            {/* Image */}
             <div className="image-container">
               <img
                 src={result.imageUrl}
-                alt="Generated thumbnail"
+                alt={`Thumbnail for ${result.topic || topic}`}
+                crossOrigin="anonymous"
               />
               <div className="image-overlay">
                 <span className="image-overlay-text">
-                  {model === 'dalle3' ? '🎨 DALL·E 3' : '⚡ Stable Diffusion XL'}
+                  {model === 'flux' ? '🎨 Creative Style' : '📸 Photorealistic'}
                 </span>
               </div>
             </div>
 
-            {/* Prompt */}
-            <div style={{ marginTop: '1rem' }}>
-              <p className="result-label">Generation Prompt</p>
-              <div className="prompt-box">
-                <pre>{result.prompt}</pre>
-                <button onClick={handleCopy} className="prompt-copy-btn">
-                  📋 Copy
-                </button>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
             <div className="btn-group">
               <button onClick={handleDownload} className="btn btn-success">
-                ⬇ Download
+                ⬇ Download Thumbnail
               </button>
               <button onClick={handleGenerate} className="btn btn-secondary">
                 🔄 Regenerate
               </button>
-              <button onClick={handleCopy} className="btn btn-secondary">
+              <button onClick={handleCopyPrompt} className="btn btn-secondary">
                 📋 Copy Prompt
               </button>
+            </div>
+
+            <div style={{ marginTop: '1rem' }}>
+              <p className="result-label">🤖 AI Prompt Used</p>
+              <div className="prompt-box">
+                <pre>{result.prompt}</pre>
+                <button onClick={handleCopyPrompt} className="prompt-copy-btn">📋 Copy</button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Error */}
         {result?.error && (
           <div className="error-display">
             <span className="error-icon">⚠️</span>
@@ -196,9 +194,8 @@ export default function Home() {
         )}
       </div>
 
-      {/* Toast Notification */}
-      <div className={`toast ${toastVisible ? 'visible' : ''}`}>
-        ✓ Copied to clipboard
+      <div className={`toast ${toastMessage ? 'visible' : ''}`}>
+        {toastMessage || ''}
       </div>
     </>
   );

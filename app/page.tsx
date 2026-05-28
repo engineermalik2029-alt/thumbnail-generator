@@ -1,11 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface GenerateResponse {
   imageUrl: string;
   prompt: string;
   topic: string;
+  error?: string;
+}
+
+interface ThumbnailData {
+  imageUrl: string;
+  prompt: string;
+  topic: string;
+  id: number;
   error?: string;
 }
 
@@ -23,118 +31,276 @@ const TOPICS = [
 ];
 
 const STYLES = [
-  { id: 'flux', label: '🎨 Creative & Bold', desc: 'Vibrant colors, dramatic effects, text overlays' },
-  { id: 'flux-realism', label: '📸 Photorealistic', desc: 'Realistic scenes, cinematic lighting, pro look' },
-  { id: 'flux-anime', label: '🌸 Anime Style', desc: 'Japanese anime aesthetic, bold outlines' },
+  { id: 'flux', label: '🎨 Creative & Bold', desc: 'Vibrant colors, dramatic effects' },
+  { id: 'flux-realism', label: '📸 Photorealistic', desc: 'Realistic scenes, cinematic look' },
+  { id: 'flux-anime', label: '🌸 Anime Style', desc: 'Japanese anime aesthetic' },
 ];
+
+const FONTS = [
+  { name: 'Arial Black', label: '🔴 Bold Impact' },
+  { name: 'Impact', label: '⚫ Classic Impact' },
+  { name: 'Arial', label: '🔵 Clean Modern' },
+  { name: 'Georgia', label: '🟡 Serif Premium' },
+];
+
+const TEXT_POSITIONS = ['bottom', 'top', 'center'];
+
+// YouTube-style colors
+const TEXT_COLORS = [
+  { fill: '#FFFFFF', stroke: '#000000', glow: true, label: 'White/Black (Classic)' },
+  { fill: '#FFD700', stroke: '#000000', glow: true, label: 'Gold/Black' },
+  { fill: '#FF0033', stroke: '#000000', glow: true, label: 'Red/Black' },
+  { fill: '#00E5FF', stroke: '#000000', glow: true, label: 'Cyan/Black' },
+];
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+  
+  for (const word of words) {
+    const testLine = currentLine ? currentLine + ' ' + word : word;
+    if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  
+  // If only one line but too long, force split
+  if (lines.length === 1 && ctx.measureText(lines[0]).width > maxWidth) {
+    const mid = Math.ceil(words.length / 2);
+    return [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+  }
+  
+  return lines;
+}
+
+function drawThumbnailText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  width: number,
+  height: number,
+  position: string,
+  font: string,
+  color: typeof TEXT_COLORS[0]
+) {
+  // Font sizing based on text length
+  const maxWidth = width * 0.85;
+  let fontSize = Math.min(120, Math.floor(width / (text.length * 0.6)));
+  fontSize = Math.max(36, fontSize);
+  
+  // Set font for measurement
+  ctx.font = `900 ${fontSize}px "${font}", Arial Black, Impact, sans-serif`;
+  
+  // Break text into lines
+  const lines = wrapText(ctx, text.toUpperCase(), maxWidth);
+  const lineCount = lines.length;
+  
+  // Adjust font size if multiple lines
+  if (lineCount > 1) {
+    fontSize = Math.min(90, Math.floor(width / (Math.max(...lines.map(l => l.length)) * 0.55)));
+    fontSize = Math.max(28, fontSize);
+    ctx.font = `900 ${fontSize}px "${font}", Arial Black, Impact, sans-serif`;
+  }
+  
+  const lineHeight = fontSize * 1.15;
+  const totalHeight = lineCount * lineHeight;
+  
+  // Calculate Y position
+  let startY: number;
+  const padding = height * 0.08;
+  switch (position) {
+    case 'top': startY = padding + lineHeight; break;
+    case 'center': startY = (height - totalHeight) / 2 + lineHeight * 0.8; break;
+    case 'bottom': default: startY = height - padding - totalHeight + lineHeight * 0.85; break;
+  }
+  
+  // Text effects
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  // Draw each line
+  for (let i = 0; i < lines.length; i++) {
+    const y = startY + i * lineHeight;
+    const line = lines[i];
+    
+    // Shadow (glow effect)
+    if (color.glow) {
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 4;
+    }
+    
+    // Thick outline for readability
+    ctx.strokeStyle = color.stroke;
+    ctx.lineWidth = fontSize * 0.12;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeText(line, width / 2, y);
+    
+    // Additional outline layer for more visibility
+    ctx.lineWidth = fontSize * 0.06;
+    ctx.strokeStyle = color.stroke;
+    ctx.strokeText(line, width / 2, y);
+    
+    // Fill text
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillStyle = color.fill;
+    ctx.fillText(line, width / 2, y);
+    
+    // Inner glow / highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillText(line, width / 2, y - fontSize * 0.02);
+  }
+}
 
 export default function Home() {
   const [topic, setTopic] = useState('');
   const [model, setModel] = useState('flux');
   const [count, setCount] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<GenerateResponse[]>([]);
+  const [thumbnails, setThumbnails] = useState<ThumbnailData[]>([]);
   const [toast, setToast] = useState('');
-  const [activeResult, setActiveResult] = useState(0);
+  const [activeId, setActiveId] = useState(0);
+  const [textFont, setTextFont] = useState('Arial Black');
+  const [textPosition, setTextPosition] = useState('bottom');
+  const [textColor, setTextColor] = useState(TEXT_COLORS[0]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 2500);
-  };
+  }, []);
 
   const handleGenerate = async () => {
     if (!topic.trim()) return;
     setLoading(true);
-    setResults([]);
-    setActiveResult(0);
+    setThumbnails([]);
+    setActiveId(0);
 
     try {
-      // Generate multiple variants
       const promises = Array.from({ length: count }, async (_, i) => {
         const res = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            topic: topic.trim(),
-            imageModel: model,
-            variant: i,
-          }),
+          body: JSON.stringify({ topic: topic.trim(), imageModel: model, variant: i }),
         });
         const data = await res.json() as GenerateResponse;
         if (!res.ok) throw new Error(data.error || 'Generation failed');
-        return data;
+        return { ...data, id: Date.now() + i };
       });
 
       const generated = await Promise.all(promises);
-      setResults(generated);
+      setThumbnails(generated);
     } catch (e: any) {
-      setResults([{ imageUrl: '', prompt: '', topic: '', error: e.message }]);
+      setThumbnails([{ imageUrl: '', prompt: '', topic: '', error: e.message, id: Date.now() }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownload = async (imageUrl: string, idx: number) => {
-    const filename = `${topic.replace(/\s+/g, '_').toLowerCase()}_thumbnail_${idx + 1}.png`;
+  const compositeImage = useCallback((imageUrl: string, text: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 1920;
+        canvas.height = img.naturalHeight || 1080;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('No canvas context')); return; }
+
+        // Draw background image
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Draw YouTube-style text overlay
+        drawThumbnailText(ctx, text, canvas.width, canvas.height, textPosition, textFont, textColor);
+
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => {
+        // If image fails, create a colored background with text
+        const canvas = document.createElement('canvas');
+        canvas.width = 1920;
+        canvas.height = 1080;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('No canvas context')); return; }
+
+        // Gradient background
+        const gradient = ctx.createLinearGradient(0, 0, 1920, 1080);
+        gradient.addColorStop(0, '#ff0033');
+        gradient.addColorStop(0.5, '#6c63ff');
+        gradient.addColorStop(1, '#00e5ff');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 1920, 1080);
+
+        // Decorative circles
+        for (let i = 0; i < 5; i++) {
+          ctx.beginPath();
+          ctx.arc(
+            200 + Math.random() * 1500,
+            200 + Math.random() * 600,
+            50 + Math.random() * 200,
+            0, Math.PI * 2
+          );
+          ctx.fillStyle = `rgba(255,255,255,${0.03 + Math.random() * 0.05})`;
+          ctx.fill();
+        }
+
+        drawThumbnailText(ctx, text, 1920, 1080, textPosition, textFont, textColor);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = imageUrl;
+    });
+  }, [textPosition, textFont, textColor]);
+
+  const handleDownload = async (thumb: ThumbnailData) => {
     try {
-      // Try blob download first (works with same-origin)
-      const res = await fetch(imageUrl, { mode: 'cors' });
-      if (res.ok) {
+      showToast('⏳ Rendering thumbnail with text...');
+      const dataUrl = await compositeImage(thumb.imageUrl, thumb.topic);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `${thumb.topic.replace(/\s+/g, '_').toLowerCase()}_thumbnail.png`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => document.body.removeChild(a), 100);
+      showToast('✅ Downloaded to your computer!');
+    } catch {
+      // Fallback: download raw image
+      try {
+        const res = await fetch(thumb.imageUrl);
         const blob = await res.blob();
-        // Convert to PNG if needed
-        const pngBlob = new Blob([blob], { type: 'image/png' });
-        const url = URL.createObjectURL(pngBlob);
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = `${thumb.topic.replace(/\s+/g, '_').toLowerCase()}_thumbnail.png`;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
         showToast('✅ Downloaded!');
-        return;
-      }
-      throw new Error('Fetch failed');
-    } catch (_e1) {
-      // Fallback: open image in new tab with download attribute via data URL
-      try {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.src = imageUrl;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-        });
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0);
-        const dataUrl = canvas.toDataURL('image/png');
-        const a = document.createElement('a');
-        a.href = dataUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); }, 100);
-        showToast('✅ Downloaded!');
-      } catch (_e2) {
-        // Last resort: open in new tab
-        window.open(imageUrl, '_blank');
-        showToast('Right-click image → Save as PNG');
+      } catch {
+        window.open(thumb.imageUrl, '_blank');
+        showToast('Right-click → Save as PNG');
       }
     }
   };
 
-  const handleCopyImage = async (imageUrl: string) => {
+  const handleCopyImage = async (thumb: ThumbnailData) => {
     try {
-      const res = await fetch(imageUrl);
-      const blob = await res.blob();
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob })
-      ]);
+      const dataUrl = await compositeImage(thumb.imageUrl, thumb.topic);
+      const blob = await (await fetch(dataUrl)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       showToast('✅ Image copied!');
-    } catch (_e3) {
-      await navigator.clipboard.writeText(imageUrl);
+    } catch {
+      await navigator.clipboard.writeText(thumb.imageUrl);
       showToast('✅ URL copied!');
     }
   };
@@ -148,6 +314,8 @@ export default function Home() {
     if (e.key === 'Enter' && !loading && topic.trim()) handleGenerate();
   };
 
+  const activeThumb = thumbnails[activeId];
+
   return (
     <div className="main-container">
       {/* Navigation */}
@@ -158,49 +326,27 @@ export default function Home() {
         </a>
         <div className="nav-actions">
           <a href="#generator" className="nav-link">Generator</a>
-          <a href="https://github.com/engineermalik2029-alt/thumbnail-generator" target="_blank" className="nav-btn" rel="noreferrer">
-            ⭐ Star on GitHub
-          </a>
+          <a href="https://github.com/engineermalik2029-alt/thumbnail-generator" target="_blank" className="nav-btn" rel="noreferrer">⭐ Star on GitHub</a>
         </div>
       </nav>
 
-      {/* Hero Section */}
+      {/* Hero */}
       <section className="hero">
-        <div className="hero-badge">
-          <span className="dot" />
-          🔥 Free • No Signup • AI-Powered
-        </div>
+        <div className="hero-badge"><span className="dot" /> 🔥 Free • No Signup • AI-Powered</div>
         <h1 className="hero-title">
           <span className="gradient-text">Professional YouTube Thumbnails<br />Generated by AI</span>
         </h1>
         <p className="hero-subtitle">
-          Create click-worthy thumbnails that top YouTubers would be proud of. 
-          Just enter your topic and get pro-designed thumbnails with text overlays, 
-          cinematic lighting, and bold compositions — completely free.
+          AI generates stunning backgrounds — then we add bold YouTube-style text overlays. 
+          Results look like a pro designer made them.
         </p>
-        <div className="hero-stats">
-          <div className="hero-stat">
-            <div className="hero-stat-value">Free</div>
-            <div className="hero-stat-label">No API Key Needed</div>
-          </div>
-          <div className="hero-stat">
-            <div className="hero-stat-value">3×</div>
-            <div className="hero-stat-label">Style Variants</div>
-          </div>
-          <div className="hero-stat">
-            <div className="hero-stat-value">4K</div>
-            <div className="hero-stat-label">Resolution</div>
-          </div>
-        </div>
       </section>
 
-      {/* Generator Section */}
+      {/* Generator */}
       <section id="generator" className="grid-2">
-        {/* Left Panel - Controls */}
+        {/* Left Panel */}
         <div className="card">
-          <div className="card-header">
-            <span className="card-title">⚙️ Thumbnail Settings</span>
-          </div>
+          <div className="card-header"><span className="card-title">⚙️ Thumbnail Settings</span></div>
 
           <div className="form-group">
             <label className="form-label">🎬 Video Topic</label>
@@ -221,11 +367,7 @@ export default function Home() {
             <label className="form-label">🎨 Quick Topics</label>
             <div className="chips">
               {TOPICS.slice(0, 5).map((t) => (
-                <button
-                  key={t}
-                  className={`chip ${topic === t ? 'active' : ''}`}
-                  onClick={() => setTopic(t)}
-                >
+                <button key={t} className={`chip ${topic === t ? 'active' : ''}`} onClick={() => setTopic(t)}>
                   {t}
                 </button>
               ))}
@@ -233,7 +375,7 @@ export default function Home() {
           </div>
 
           <div className="form-group">
-            <label className="form-label">🎨 Thumbnail Style</label>
+            <label className="form-label">🎨 Background Style</label>
             <div className="chips" style={{ flexDirection: 'column', gap: '0.3rem' }}>
               {STYLES.map((s) => (
                 <button
@@ -244,8 +386,45 @@ export default function Home() {
                 >
                   <div>
                     <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{s.label}</div>
-                    <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: '0.15rem' }}>{s.desc}</div>
+                    <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>{s.desc}</div>
                   </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">🔤 Text Style</label>
+            <div className="chips">
+              {FONTS.map((f) => (
+                <button key={f.name} className={`chip ${textFont === f.name ? 'active' : ''}`} onClick={() => setTextFont(f.name)}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">🎨 Text Color</label>
+            <div className="chips">
+              {TEXT_COLORS.map((c, i) => (
+                <button
+                  key={i}
+                  className={`chip ${textColor.fill === c.fill ? 'active' : ''}`}
+                  onClick={() => setTextColor(c)}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">📍 Text Position</label>
+            <div className="chips">
+              {TEXT_POSITIONS.map((p) => (
+                <button key={p} className={`chip ${textPosition === p ? 'active' : ''}`} onClick={() => setTextPosition(p)}>
+                  {p === 'bottom' ? '⬇ Bottom' : p === 'top' ? '⬆ Top' : '⬛ Center'}
                 </button>
               ))}
             </div>
@@ -255,33 +434,17 @@ export default function Home() {
             <label className="form-label">📦 Generate</label>
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <div className="select-wrapper" style={{ width: '100px' }}>
-                <select
-                  value={count}
-                  onChange={(e) => setCount(Number(e.target.value))}
-                  className="select-field"
-                  style={{ padding: '0.8rem 1rem' }}
-                >
+                <select value={count} onChange={(e) => setCount(Number(e.target.value))} className="select-field" style={{ padding: '0.8rem 1rem' }}>
                   <option value={1}>1 image</option>
                   <option value={2}>2 images</option>
                   <option value={3}>3 images</option>
                 </select>
               </div>
-              <button
-                onClick={handleGenerate}
-                disabled={loading || !topic.trim()}
-                className="btn btn-primary"
-                style={{ flex: 1 }}
-              >
+              <button onClick={handleGenerate} disabled={loading || !topic.trim()} className="btn btn-primary" style={{ flex: 1 }}>
                 {loading ? (
-                  <>
-                    <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
-                    Generating...
-                  </>
+                  <><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Generating...</>
                 ) : (
-                  <>
-                    <span>✨</span>
-                    Generate Thumbnails
-                  </>
+                  <><span>✨</span> Generate Thumbnails</>
                 )}
               </button>
             </div>
@@ -290,130 +453,104 @@ export default function Home() {
           {loading && (
             <div className="loading-container">
               <div className="loading-text">
-                🎨 Generating {count} professional thumbnail{count > 1 ? 's' : ''}...
-                <br />
-                <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>
-                  Crafting compositions, applying text overlays, optimizing colors
-                </span>
+                🎨 Generating {count} background{count > 1 ? 's' : ''}...
+                <br /><span style={{ fontSize: '0.75rem', opacity: 0.6 }}>Creating scenes, then applying text overlays</span>
               </div>
-              <div className="loading-bar-container">
-                <div className="loading-bar" />
-              </div>
+              <div className="loading-bar-container"><div className="loading-bar" /></div>
             </div>
           )}
 
-          {results.length > 0 && results[0]?.error && (
+          {activeThumb?.error && (
             <div className="error-display">
               <span className="error-icon">⚠️</span>
-              <span className="error-text">{results[0].error}</span>
+              <span className="error-text">{activeThumb.error}</span>
             </div>
           )}
         </div>
 
-        {/* Right Panel - Results */}
+        {/* Right Panel - Result */}
         <div className="card">
           <div className="card-header">
             <span className="card-title">
-              {results.length > 0 && !results[0]?.error
-                ? `🎯 ${results.length} Thumbnail${results.length > 1 ? 's' : ''} Generated`
+              {thumbnails.length > 0 && !activeThumb?.error
+                ? `🎯 ${thumbnails.length} Thumbnail${thumbnails.length > 1 ? 's' : ''}`
                 : '🎯 Preview'}
             </span>
-            {results.length > 0 && !results[0]?.error && (
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                Click thumbnail to view actions
-              </span>
-            )}
           </div>
 
-          {results.length === 0 && !loading && (
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              padding: '4rem 2rem', color: 'var(--text-muted)', textAlign: 'center',
-            }}>
+          {thumbnails.length === 0 && !loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '4rem 2rem', color: 'var(--text-muted)', textAlign: 'center' }}>
               <span style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.3 }}>🎨</span>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
-                Your thumbnails will appear here
-              </h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Your thumbnails will appear here</h3>
               <p style={{ fontSize: '0.85rem', maxWidth: '300px', lineHeight: 1.5 }}>
-                Enter a video topic and click generate to create professional AI thumbnails
+                Enter a topic, choose your style, and generate pro thumbnails
               </p>
             </div>
           )}
 
-          {results.length > 0 && !results[0]?.error && (
+          {thumbnails.length > 0 && !activeThumb?.error && (
             <>
-              {/* Image Tabs */}
-              {results.length > 1 && (
+              {thumbnails.length > 1 && (
                 <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.75rem' }}>
-                  {results.map((_, i) => (
-                    <button
-                      key={i}
-                      className={`chip ${activeResult === i ? 'active' : ''}`}
-                      onClick={() => setActiveResult(i)}
-                    >
+                  {thumbnails.map((t, i) => (
+                    <button key={t.id} className={`chip ${activeId === i ? 'active' : ''}`} onClick={() => setActiveId(i)}>
                       Thumbnail {i + 1}
                     </button>
                   ))}
                 </div>
               )}
 
-              {/* Main Image */}
-              <div className="image-card" style={{ cursor: 'default', marginBottom: '0.75rem' }}>
+              {/* Canvas with composited image */}
+              <div className="image-card" style={{ cursor: 'default', marginBottom: '0.75rem', position: 'relative' }}>
+                <canvas
+                  ref={canvasRef}
+                  width={1920}
+                  height={1080}
+                  style={{ width: '100%', aspectRatio: '16/9', borderRadius: 'var(--radius-md)' }}
+                />
                 <img
-                  src={results[activeResult].imageUrl}
-                  alt={`Thumbnail ${activeResult + 1}`}
-                  className="image-card-img"
-                  style={{ aspectRatio: '16/9' }}
+                  ref={imageRef}
+                  src={activeThumb.imageUrl}
+                  alt={`Background for ${activeThumb.topic}`}
                   crossOrigin="anonymous"
+                  style={{ display: 'none' }}
+                  onLoad={() => {
+                    const canvas = canvasRef.current;
+                    const img = imageRef.current;
+                    if (!canvas || !img) return;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+
+                    // Draw background
+                    ctx.drawImage(img, 0, 0, 1920, 1080);
+
+                    // Draw text overlay
+                    drawThumbnailText(ctx, activeThumb.topic, 1920, 1080, textPosition, textFont, textColor);
+                  }}
                 />
                 <div className="image-card-overlay" style={{ opacity: 1, justifyContent: 'center', gap: '0.75rem' }}>
-                  <button
-                    onClick={() => handleDownload(results[activeResult].imageUrl, activeResult)}
-                    className="image-card-btn"
-                    title="Download"
-                    style={{ width: 40, height: 40 }}
-                  >⬇</button>
-                  <button
-                    onClick={() => handleCopyImage(results[activeResult].imageUrl)}
-                    className="image-card-btn"
-                    title="Copy Image"
-                    style={{ width: 40, height: 40 }}
-                  >📋</button>
-                  <button
-                    onClick={() => handleCopyPrompt(results[activeResult].prompt)}
-                    className="image-card-btn"
-                    title="Copy Prompt"
-                    style={{ width: 40, height: 40 }}
-                  >📝</button>
+                  <button onClick={() => handleDownload(activeThumb)} className="image-card-btn" title="Download" style={{ width: 40, height: 40 }}>⬇</button>
+                  <button onClick={() => handleCopyImage(activeThumb)} className="image-card-btn" title="Copy Image" style={{ width: 40, height: 40 }}>📋</button>
+                  <button onClick={() => handleCopyPrompt(activeThumb.prompt)} className="image-card-btn" title="Copy Prompt" style={{ width: 40, height: 40 }}>📝</button>
                 </div>
               </div>
 
-              {/* Prompt */}
+              {/* Prompt Box */}
               <div className="prompt-box">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px', fontWeight: 600 }}>
-                    🤖 AI Prompt Used
-                  </span>
-                  <button
-                    onClick={() => handleCopyPrompt(results[activeResult].prompt)}
-                    className="btn btn-sm btn-secondary"
-                    style={{ padding: '0.2rem 0.6rem', fontSize: '0.65rem' }}
-                  >📋 Copy</button>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.3px', fontWeight: 600 }}>🤖 AI Background Prompt</span>
+                  <button onClick={() => handleCopyPrompt(activeThumb.prompt)} className="btn btn-sm btn-secondary" style={{ padding: '0.2rem 0.6rem', fontSize: '0.65rem' }}>📋 Copy</button>
                 </div>
-                <pre>{results[activeResult].prompt.substring(0, 300)}...</pre>
+                <pre>{activeThumb.prompt}</pre>
               </div>
 
-              {/* All Thumbnails Grid */}
-              {results.length > 1 && (
+              {/* Thumbnails Grid */}
+              {thumbnails.length > 1 && (
                 <div className="result-grid">
-                  {results.map((r, i) => (
-                    <div
-                      key={i}
-                      className="image-card"
-                      onClick={() => setActiveResult(i)}
-                      style={{ border: activeResult === i ? '2px solid var(--primary)' : '1px solid var(--border-color)' }}
-                    >
-                      <img src={r.imageUrl} alt={`Thumb ${i + 1}`} className="image-card-img" crossOrigin="anonymous" />
+                  {thumbnails.map((t, i) => (
+                    <div key={t.id} className="image-card" onClick={() => setActiveId(i)}
+                      style={{ border: activeId === i ? '2px solid var(--primary)' : '1px solid var(--border-color)' }}>
+                      <img src={t.imageUrl} alt={`Thumb ${i + 1}`} className="image-card-img" crossOrigin="anonymous" />
                     </div>
                   ))}
                 </div>
@@ -425,17 +562,11 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="footer">
-        <p>
-          Built with ❤️ using <a href="https://nextjs.org" target="_blank" rel="noreferrer">Next.js</a> &{' '}
-          <a href="https://pollinations.ai" target="_blank" rel="noreferrer">Pollinations AI</a> •{' '}
-          <a href="https://github.com/engineermalik2029-alt/thumbnail-generator" target="_blank" rel="noreferrer">Open Source</a>
-        </p>
+        <p>Built with ❤️ using <a href="https://nextjs.org" target="_blank" rel="noreferrer">Next.js</a> & <a href="https://pollinations.ai" target="_blank" rel="noreferrer">Pollinations AI</a> • <a href="https://github.com/engineermalik2029-alt/thumbnail-generator" target="_blank" rel="noreferrer">Open Source</a></p>
       </footer>
 
       {/* Toast */}
-      <div className={`toast ${toast ? 'visible' : ''}`}>
-        {toast}
-      </div>
+      <div className={`toast ${toast ? 'visible' : ''}`}>{toast}</div>
     </div>
   );
 }

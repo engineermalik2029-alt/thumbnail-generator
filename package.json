@@ -1,6 +1,6 @@
 {
-  "name": "youtube-thumbnail-generator",
-  "version": "2.0.0",
+  "name": "thumbnail-generator-pro",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

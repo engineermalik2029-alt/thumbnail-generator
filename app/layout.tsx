@@ -1,8 +1,14 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'YouTube Thumbnail Generator',
-  description: 'Generate AI-powered YouTube thumbnails with DALL·E 3 and Stable Diffusion',
+  title: 'ThumbnailForge — AI YouTube Thumbnail Generator',
+  description: 'Create professional, click-worthy YouTube thumbnails with AI. Free, no signup, instant generation. Used by content creators worldwide.',
+  keywords: 'thumbnail generator, youtube thumbnail, ai thumbnail, thumbnail maker, free thumbnail creator',
+  openGraph: {
+    title: 'ThumbnailForge — AI YouTube Thumbnail Generator',
+    description: 'Create professional, click-worthy YouTube thumbnails with AI. Free, no signup required.',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({
@@ -13,15 +19,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="background-container">
-          <div className="background-gradient bg-gradient-1" />
-          <div className="background-gradient bg-gradient-2" />
-          <div className="background-gradient bg-gradient-3" />
+        <div className="bg-container">
+          <div className="bg-orb bg-orb-1" />
+          <div className="bg-orb bg-orb-2" />
+          <div className="bg-orb bg-orb-3" />
           <div className="bg-grid" />
         </div>
-        <div className="main-container">
-          {children}
-        </div>
+        {children}
       </body>
     </html>
   );

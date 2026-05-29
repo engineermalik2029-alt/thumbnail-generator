@@ -1,104 +1,105 @@
 import { NextResponse } from 'next/server';
 
-/**
- * Professional Cinematic Thumbnail Generator
- * Uses HiDream AI with expert-level prompt engineering
- */
-
 interface GenerateRequest {
   topic: string;
   subjectDescription: string;
   overlayText: string;
   imageModel: string;
+  preset: string;
+  creativity: number;
+  guidanceScale: number;
   variant: number;
 }
 
 /**
- * Builds a hyper-realistic cinematic prompt following professional template
+ * Enhanced subject description with professional YouTube thumbnail language
  */
-function buildCinematicPrompt(params: {
+function enhanceSubject(subject: string): string {
+  if (!subject || subject.length < 5) return 'a person with an extreme over-the-top shocked expression, wide eyes, open mouth, looking directly at camera';
+  
+  const enhancements: Record<string, string> = {
+    'shocked': 'extreme shocked expression, eyes wide, jaw dropped, looking at camera intensely',
+    'surprise': 'dramatic surprised face, eyebrows raised, mouth open, genuine astonishment',
+    'excited': 'over-the-top excited expression, huge smile, eyes lit up, high energy',
+    'intense': 'intense focused expression, furrowed brows, determined look, staring straight ahead',
+    'pointing': 'pointing directly at camera with exaggerated expression, engaged, energetic pose',
+    'hoodie': 'wearing a hoodie, casual but intense expression, street style energy',
+    'gamer': 'gamer expression of intense concentration or excitement, headset on, leaning forward',
+    'smiling': 'huge confident smile, charismatic, approachable, camera-ready energy',
+  };
+
+  const lower = subject.toLowerCase();
+  for (const [key, enhancement] of Object.entries(enhancements)) {
+    if (lower.includes(key)) {
+      return `${enhancement}, ${subject}`;
+    }
+  }
+
+  return `${subject}, with an extreme high-energy expression, looking at camera, professional YouTube thumbnail pose`;
+}
+
+/**
+ * Build a YouTube-optimized prompt (not cinematic - YouTube style)
+ */
+function buildYouTubePrompt(params: {
   topic: string;
   subject: string;
-  model: string;
+  preset: string;
+  creativity: number;
   variant: number;
 }): string {
-  const { topic, subject, model } = params;
+  const { topic, preset } = params;
+  const cleanTopic = topic.replace(/["""]/g, '').trim();
+  const cleanSubject = enhanceSubject(params.subject);
 
-  // Style-specific color palettes and lighting
-  const styles: Record<string, {
+  // Preset-specific configurations
+  const presets: Record<string, {
     colors: string;
-    lighting: string;
     background: string;
-    vibe: string;
+    style: string;
   }> = {
-    'flux': {
-      colors: 'deep red (#ff0033) + electric yellow (#ffd700) + dark blue (#0a0a2e)',
-      lighting: 'dramatic top-left key light, intense rim light on edges, cinematic shadows, volumetric lighting rays',
-      background: 'dark atmospheric studio with neon accents, slightly blurred depth of field, futuristic subtle grid pattern',
-      vibe: 'high-energy, bold, intense, click-worthy, MrBeast-style drama',
+    'harry': {
+      colors: 'bright yellow (#FFD700), deep dark blue (#0a0a2e), white (#FFFFFF)',
+      background: 'solid dark gradient background, simple clean backdrop, blurred studio lights in background',
+      style: 'CodeWithHarry style, bold yellow text on dark background, ultra clean, professional Indian YouTuber style, vibrant and clickable',
     },
-    'flux-realism': {
-      colors: 'warm amber (#ff8c00) + teal (#008080) + deep navy (#0a1628)',
-      lighting: 'cinematic golden hour key light from side, soft rim light, natural fill, subtle lens flare',
-      background: 'professional studio environment with controlled lighting, shallow depth of field, premium atmosphere',
-      vibe: 'premium, sophisticated, professional documentary style, cinematic realism',
+    'tech': {
+      colors: 'electric blue (#0066ff), bright orange (#ff6b00), dark navy (#0a1628)',
+      background: 'dark tech-themed background with subtle circuit patterns, glowing blue accent lights slightly blurred',
+      style: 'tech YouTuber style, blue and orange contrast, glowing futuristic elements, sharp and modern',
     },
-    'flux-anime': {
-      colors: 'vibrant magenta (#ff006e) + cyan (#00e5ff) + pastel lavender (#b388ff)',
-      lighting: 'dramatic anime-style rim lighting, soft cel-shaded glow, magical particle lighting',
-      background: 'stylized anime environment with bokeh effects, dreamy atmospheric depth, vibrant gradients',
-      vibe: 'anime cinematic, Studio Ghibli meets modern shonen, vibrant magical aesthetic',
+    'gaming': {
+      colors: 'fire red (#ff0033), bright yellow (#ffd700), dark charcoal (#1a1a1a)',
+      background: 'dark gaming setup background with RGB lighting effects, colorful neon glow slightly blurred',
+      style: 'gaming YouTuber style, red and yellow explosive energy, dynamic and high energy, ultra clickable',
     },
   };
 
-  const s = styles[model] || styles['flux'];
-  const cleanTopic = topic.replace(/["""]/g, '').trim();
-  const cleanSubject = subject || 'a person with high-energy expression';
+  const p = presets[preset] || presets['harry'];
 
-  // The professional prompt template
-  return `Generate a hyper-realistic, cinematic YouTube thumbnail in 16:9 aspect ratio (1280x720 pixels), 8K resolution, ultra-detailed, sharp focus.
-
-Subject & Composition:
-- Main subject is ${cleanSubject} in a medium shot with an expressive, high-energy emotion (shocked, excited, intense focus).
-- Subject is positioned center with the face taking up ~40% of the frame.
-- Background is slightly blurred (shallow depth of field) but adds context relating to: "${cleanTopic}".
-- ${s.background}
-
-Lighting & Color:
-- Cinematic lighting: ${s.lighting}.
-- High contrast, vibrant but not oversaturated.
-- Color palette: ${s.colors}.
-- Use glow effects sparingly around focal points.
-
-Text Overlay (if any):
-- Text: "${cleanTopic.toUpperCase()}" in bold, sans-serif font (Arial Black/Impact), white with thick black outline and drop shadow.
-- Placed in bottom third, large enough to read on mobile.
-
-Style keywords:
-${s.vibe}, 8K, cinematic, hyper-detailed, professional thumbnail, dramatic lighting, rim light, volumetric lighting, sharp focus, shallow depth of field, vibrant, pop effect, dark background, subject stands out.
-
-Negative prompts (avoid):
-blurry, pixelated, low resolution, washed out, flat lighting, cartoon, anime, watercolor, sketch, black and white, cluttered background, too many elements, distorted face, unnatural anatomy, cheap stock photo look, watermarks, logos, text in background, overexposed, dark and underexposed, extra text, spelling errors, typos.`;
+  return `Generate a YouTube thumbnail in 16:9 (1280x720). Subject: ${cleanSubject}. The face should fill ~40% of the frame, positioned center. Background: ${p.background}. Lighting: high contrast, key light from side, rim light to separate subject from background. Colors: ${p.colors}. Add a subtle glow or outline around the subject. NO TEXT in the generated image - text will be added separately. Style keywords: ${p.style}, professional YouTube thumbnail, high energy, clickable, pop effect, vibrant, sharp, 8K, clean background, subject pops out. Negative prompts: blurry, low resolution, flat lighting, cartoon, anime, dark underexposed, watermarks, logo, multiple faces, text in image, cluttered background, washed out, pixelated.`;
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json() as GenerateRequest;
-    const { topic, subjectDescription, overlayText, imageModel, variant = 0 } = body;
+    const {
+      topic, subjectDescription, overlayText, imageModel,
+      preset = 'harry', creativity = 7, guidanceScale = 7, variant = 0
+    } = body;
 
     if (!topic) {
       return NextResponse.json({ error: 'Video topic is required' }, { status: 400 });
     }
 
-    const model = imageModel || 'flux';
-    const prompt = buildCinematicPrompt({
+    const prompt = buildYouTubePrompt({
       topic,
       subject: subjectDescription || '',
-      model,
+      preset,
+      creativity,
       variant,
     });
 
-    // Determine overlay text: use user's custom text or the topic
     const displayText = overlayText || topic;
 
     // Try HiDream local AI server
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
           width: 1280,
           height: 720,
         }),
-        signal: AbortSignal.timeout(180000), // 3 min timeout
+        signal: AbortSignal.timeout(180000),
       });
 
       if (hiDreamRes.ok) {
@@ -124,6 +125,8 @@ export async function POST(request: Request) {
             imageUrl,
             topic: displayText,
             prompt,
+            preset,
+            creativity,
           });
         }
       }
@@ -131,28 +134,31 @@ export async function POST(request: Request) {
       console.log('HiDream unavailable, using gradient fallback');
     }
 
-    // Fallback: return gradient info + the prompt
-    const gradients = [
-      { name: 'Cinematic Red', colors: ['#0a0000', '#4a0000', '#ff0033'], accent: '#ff0033' },
-      { name: 'Cyberpunk Neon', colors: ['#0a0a2e', '#1a1a4e', '#ff006e'], accent: '#00e5ff' },
-      { name: 'Golden Hour', colors: ['#1a0a00', '#8b4513', '#ffaa00'], accent: '#ffd700' },
-      { name: 'Royal Crimson', colors: ['#1a0005', '#3a0010', '#8b0000'], accent: '#ff1744' },
-      { name: 'Ocean Depths', colors: ['#000a1a', '#001a3a', '#003366'], accent: '#00bfff' },
-      { name: 'Mystic Violet', colors: ['#0a001a', '#2a0040', '#7b1fa2'], accent: '#ce93d8' },
-    ];
-
-    const indices: Record<string, number[]> = {
-      'flux': [0, 1, 4],
-      'flux-realism': [2, 3, 5],
-      'flux-anime': [5, 1, 0],
+    // Fallback: gradient data
+    const gradientSets: Record<string, { name: string; colors: string[]; accent: string }[]> = {
+      'harry': [
+        { name: 'Harry Dark', colors: ['#0a0a2e', '#1a1a4e', '#0a0a2e'], accent: '#FFD700' },
+        { name: 'Harry Midnight', colors: ['#000000', '#1a1a2e', '#0a0a2e'], accent: '#FFD700' },
+      ],
+      'tech': [
+        { name: 'Tech Blue', colors: ['#0a1628', '#004e92', '#0a1628'], accent: '#0066ff' },
+        { name: 'Tech Orange', colors: ['#1a0a00', '#cc6600', '#0a1628'], accent: '#ff6b00' },
+      ],
+      'gaming': [
+        { name: 'Gaming Red', colors: ['#1a0000', '#4a0000', '#1a0000'], accent: '#ff0033' },
+        { name: 'Gaming Fire', colors: ['#0a0000', '#4a0000', '#ff6b00'], accent: '#ffd700' },
+      ],
     };
-    const idx = (indices[model] || indices['flux'])[variant % 3];
-    const gradient = gradients[idx];
+
+    const gradients = gradientSets[preset] || gradientSets['harry'];
+    const gradient = gradients[variant % gradients.length];
 
     return NextResponse.json({
       gradient,
       topic: displayText,
       prompt,
+      preset,
+      creativity,
     });
 
   } catch (err: any) {

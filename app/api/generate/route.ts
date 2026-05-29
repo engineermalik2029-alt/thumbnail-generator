@@ -1,165 +1,160 @@
 import { NextResponse } from 'next/server';
 
-interface GenerateRequest {
-  topic: string;
-  subjectDescription: string;
-  overlayText: string;
-  imageModel: string;
-  preset: string;
-  creativity: number;
-  guidanceScale: number;
-  variant: number;
+/**
+ * YouTube Thumbnail Generator using Google Gemini 2.0 Flash
+ * Free API - 500+ images per day
+ */
+
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent';
+
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
 }
 
-/**
- * Enhanced subject description with professional YouTube thumbnail language
- */
-function enhanceSubject(subject: string): string {
-  if (!subject || subject.length < 5) return 'a person with an extreme over-the-top shocked expression, wide eyes, open mouth, looking directly at camera';
-  
-  const enhancements: Record<string, string> = {
-    'shocked': 'extreme shocked expression, eyes wide, jaw dropped, looking at camera intensely',
-    'surprise': 'dramatic surprised face, eyebrows raised, mouth open, genuine astonishment',
-    'excited': 'over-the-top excited expression, huge smile, eyes lit up, high energy',
-    'intense': 'intense focused expression, furrowed brows, determined look, staring straight ahead',
-    'pointing': 'pointing directly at camera with exaggerated expression, engaged, energetic pose',
-    'hoodie': 'wearing a hoodie, casual but intense expression, street style energy',
-    'gamer': 'gamer expression of intense concentration or excitement, headset on, leaning forward',
-    'smiling': 'huge confident smile, charismatic, approachable, camera-ready energy',
-  };
-
-  const lower = subject.toLowerCase();
-  for (const [key, enhancement] of Object.entries(enhancements)) {
-    if (lower.includes(key)) {
-      return `${enhancement}, ${subject}`;
-    }
-  }
-
-  return `${subject}, with an extreme high-energy expression, looking at camera, professional YouTube thumbnail pose`;
+interface GeminiCandidate {
+  content: { parts: GeminiPart[] };
 }
 
-/**
- * Build a YouTube-optimized prompt (not cinematic - YouTube style)
- */
-function buildYouTubePrompt(params: {
+interface GeminiResponse {
+  candidates: GeminiCandidate[];
+}
+
+function buildThumbnailPrompt(params: {
   topic: string;
   subject: string;
   preset: string;
-  creativity: number;
-  variant: number;
+  textPosition: string;
 }): string {
-  const { topic, preset } = params;
+  const { topic, subject, preset, textPosition } = params;
   const cleanTopic = topic.replace(/["""]/g, '').trim();
-  const cleanSubject = enhanceSubject(params.subject);
+  const cleanSubject = subject || 'a person with an extreme shocked expression';
 
-  // Preset-specific configurations
-  const presets: Record<string, {
-    colors: string;
-    background: string;
-    style: string;
-  }> = {
-    'harry': {
-      colors: 'bright yellow (#FFD700), deep dark blue (#0a0a2e), white (#FFFFFF)',
-      background: 'solid dark gradient background, simple clean backdrop, blurred studio lights in background',
-      style: 'CodeWithHarry style, bold yellow text on dark background, ultra clean, professional Indian YouTuber style, vibrant and clickable',
+  // Map position to frame placement
+  const positionMap: Record<string, string> = {
+    bottom: 'center',
+    top: 'center',
+    center: 'center'
+  };
+  const framePos = positionMap[textPosition] || 'center';
+
+  // Preset-specific color/lighting hints
+  const presets: Record<string, { colors: string; lighting: string; style: string }> = {
+    harry: {
+      colors: 'bold yellow (#FFD700) + deep dark blue (#0a0a2e) + white',
+      lighting: 'dramatic studio lighting, strong rim light, high contrast',
+      style: 'CodeWithHarry style, dark background, vibrant yellow accents, ultra clean and clickable',
     },
-    'tech': {
-      colors: 'electric blue (#0066ff), bright orange (#ff6b00), dark navy (#0a1628)',
-      background: 'dark tech-themed background with subtle circuit patterns, glowing blue accent lights slightly blurred',
-      style: 'tech YouTuber style, blue and orange contrast, glowing futuristic elements, sharp and modern',
+    tech: {
+      colors: 'electric blue (#0066ff) + bright orange (#ff6b00) + dark navy',
+      lighting: 'cool blue key light with warm orange rim light, futuristic glow',
+      style: 'tech YouTube style, blue/orange contrast, glowing futuristic elements, sharp modern look',
     },
-    'gaming': {
-      colors: 'fire red (#ff0033), bright yellow (#ffd700), dark charcoal (#1a1a1a)',
-      background: 'dark gaming setup background with RGB lighting effects, colorful neon glow slightly blurred',
-      style: 'gaming YouTuber style, red and yellow explosive energy, dynamic and high energy, ultra clickable',
+    gaming: {
+      colors: 'fire red (#ff0033) + bright yellow (#ffd700) + dark charcoal',
+      lighting: 'dramatic red and yellow stage lighting, explosive energy, neon glow',
+      style: 'gaming YouTube style, red/yellow explosive energy, dynamic high-energy clickable thumbnail',
     },
   };
 
-  const p = presets[preset] || presets['harry'];
+  const p = presets[preset] || presets.harry;
 
-  return `Generate a YouTube thumbnail in 16:9 (1280x720). Subject: ${cleanSubject}. The face should fill ~40% of the frame, positioned center. Background: ${p.background}. Lighting: high contrast, key light from side, rim light to separate subject from background. Colors: ${p.colors}. Add a subtle glow or outline around the subject. NO TEXT in the generated image - text will be added separately. Style keywords: ${p.style}, professional YouTube thumbnail, high energy, clickable, pop effect, vibrant, sharp, 8K, clean background, subject pops out. Negative prompts: blurry, low resolution, flat lighting, cartoon, anime, dark underexposed, watermarks, logo, multiple faces, text in image, cluttered background, washed out, pixelated.`;
+  return `Create a YouTube thumbnail image. 16:9 aspect ratio, 1280x720, high resolution. Subject: ${cleanSubject} with an extreme, over-the-top facial expression - shocked, screaming, or intense. Face fills about 40% of the frame, positioned ${framePos}. Background: simple, stylized, slightly blurred dark background relating to "${cleanTopic}". Colors: vibrant, high contrast, using ${p.colors}. Lighting: ${p.lighting}. Style: ${p.style}, digital art, bold black outlines, cell-shaded, pop effect, like a pro YouTube thumbnail. Do NOT include any text, letters, or words in the image. Negative prompts: photorealism, oil painting, watercolor, blurry, low resolution, multiple faces, cluttered, flat lighting.`;
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as GenerateRequest;
+    const body = await request.json();
     const {
       topic, subjectDescription, overlayText, imageModel,
-      preset = 'harry', creativity = 7, guidanceScale = 7, variant = 0
+      preset = 'harry', textPosition = 'bottom', apiKey = '',
+      variant = 0
     } = body;
 
     if (!topic) {
       return NextResponse.json({ error: 'Video topic is required' }, { status: 400 });
     }
 
-    const prompt = buildYouTubePrompt({
+    if (!apiKey) {
+      return NextResponse.json({ error: 'Gemini API key is required. Get one free at https://aistudio.google.com/apikey' }, { status: 400 });
+    }
+
+    const prompt = buildThumbnailPrompt({
       topic,
       subject: subjectDescription || '',
       preset,
-      creativity,
-      variant,
+      textPosition,
     });
 
-    const displayText = overlayText || topic;
+    const displayText = (overlayText || topic).toUpperCase();
 
-    // Try HiDream local AI server
-    const hiDreamUrl = process.env.NEXT_PUBLIC_HIDREAM_URL || 'http://localhost:5000';
-
+    // Call Google Gemini 2.0 Flash for image generation
     try {
-      const hiDreamRes = await fetch(`${hiDreamUrl}/generate-thumbnail`, {
+      const geminiRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: prompt,
-          width: 1280,
-          height: 720,
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            temperature: 0.9,
+            topP: 0.95,
+            topK: 40,
+            maxOutputTokens: 8192,
+            responseModalities: ['IMAGE']
+          }
         }),
-        signal: AbortSignal.timeout(180000),
+        signal: AbortSignal.timeout(60000),
       });
 
-      if (hiDreamRes.ok) {
-        const data = await hiDreamRes.json();
-        if (data.success && data.image) {
-          const imageUrl = `data:image/png;base64,${data.image}`;
-          return NextResponse.json({
-            imageUrl,
-            topic: displayText,
-            prompt,
-            preset,
-            creativity,
-          });
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text();
+        let errMsg = 'Gemini API error';
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.error?.message || errMsg;
+        } catch {}
+        
+        // Handle quota/rate limit errors
+        if (geminiRes.status === 429) {
+          return NextResponse.json({ error: 'API rate limit exceeded. Please wait a moment and try again, or use a different API key.' }, { status: 429 });
         }
+        if (geminiRes.status === 403) {
+          return NextResponse.json({ error: 'Invalid API key. Please check your key at https://aistudio.google.com/apikey' }, { status: 403 });
+        }
+        return NextResponse.json({ error: errMsg }, { status: geminiRes.status });
       }
-    } catch (hiDreamErr) {
-      console.log('HiDream unavailable, using gradient fallback');
+
+      const data = await geminiRes.json() as GeminiResponse;
+
+      if (!data.candidates || data.candidates.length === 0) {
+        return NextResponse.json({ error: 'No image generated. The model may have been filtered.' }, { status: 500 });
+      }
+
+      const parts = data.candidates[0].content.parts;
+      const imagePart = parts.find(p => p.inlineData?.mimeType?.startsWith('image/'));
+
+      if (!imagePart?.inlineData?.data) {
+        return NextResponse.json({ error: 'No image data in response. The model returned text instead.' }, { status: 500 });
+      }
+
+      const imageUrl = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+
+      return NextResponse.json({
+        imageUrl,
+        topic: displayText,
+        prompt,
+        preset,
+      });
+
+    } catch (fetchErr: any) {
+      console.error('Gemini fetch error:', fetchErr);
+      if (fetchErr.name === 'TimeoutError' || fetchErr.name === 'AbortError') {
+        return NextResponse.json({ error: 'Request timed out. Gemini may be busy. Try again.' }, { status: 504 });
+      }
+      return NextResponse.json({ error: `Failed to connect to Gemini API: ${fetchErr.message}` }, { status: 500 });
     }
-
-    // Fallback: gradient data
-    const gradientSets: Record<string, { name: string; colors: string[]; accent: string }[]> = {
-      'harry': [
-        { name: 'Harry Dark', colors: ['#0a0a2e', '#1a1a4e', '#0a0a2e'], accent: '#FFD700' },
-        { name: 'Harry Midnight', colors: ['#000000', '#1a1a2e', '#0a0a2e'], accent: '#FFD700' },
-      ],
-      'tech': [
-        { name: 'Tech Blue', colors: ['#0a1628', '#004e92', '#0a1628'], accent: '#0066ff' },
-        { name: 'Tech Orange', colors: ['#1a0a00', '#cc6600', '#0a1628'], accent: '#ff6b00' },
-      ],
-      'gaming': [
-        { name: 'Gaming Red', colors: ['#1a0000', '#4a0000', '#1a0000'], accent: '#ff0033' },
-        { name: 'Gaming Fire', colors: ['#0a0000', '#4a0000', '#ff6b00'], accent: '#ffd700' },
-      ],
-    };
-
-    const gradients = gradientSets[preset] || gradientSets['harry'];
-    const gradient = gradients[variant % gradients.length];
-
-    return NextResponse.json({
-      gradient,
-      topic: displayText,
-      prompt,
-      preset,
-      creativity,
-    });
 
   } catch (err: any) {
     console.error('Error:', err);

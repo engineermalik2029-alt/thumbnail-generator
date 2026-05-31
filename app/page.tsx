@@ -8,6 +8,7 @@ interface GenerateResponse {
   prompt: string;
   preset?: string;
   error?: string;
+  provider?: string;
 }
 
 interface GalleryItem {
@@ -293,6 +294,8 @@ export default function Home() {
   const [usageToday, setUsageToday] = useState(0);
   const [usageAllTime, setUsageAllTime] = useState(0);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [geminiKey, setGeminiKey] = useState('');
+  const [provider, setProvider] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
 
@@ -341,7 +344,7 @@ export default function Home() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim(), subjectDescription: subjectDesc.trim(), overlayText: overlayText.trim(), preset, intensity }),
+        body: JSON.stringify({ topic: topic.trim(), subjectDescription: subjectDesc.trim(), overlayText: overlayText.trim(), preset, intensity, geminiApiKey: geminiKey }),
       });
       const data = (await res.json()) as GenerateResponse;
       if (!res.ok) throw new Error(data.error || 'Generation failed');
@@ -349,7 +352,8 @@ export default function Home() {
         const img = await loadImage(data.imageUrl);
         bgImageRef.current = img;
         setImageUrl(data.imageUrl);
-        setPromptText(data.prompt || '');
+      setPromptText(data.prompt || '');
+      setProvider(data.provider || 'pollinations');
         renderCanvas();
         incrementUsage();
         refreshUsage();
@@ -517,8 +521,20 @@ export default function Home() {
                   style={{ width: '100%', accentColor: '#ff0033' }} />
               </div>
 
+              <div className="form-group">
+                <label className="form-label">Google Gemini API Key (optional)</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">🔑</span>
+                  <input type="password" placeholder="Paste Gemini key for better quality (optional)"
+                    value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className="input-field" />
+                </div>
+                <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                  Get free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style={{ color: '#00e5ff' }}>aistudio.google.com</a> — or leave blank for free Pollinations
+                </div>
+              </div>
+
               <button onClick={handleGenerate} disabled={loading || !topic.trim()} className="btn btn-primary">
-                {loading ? '⏳ Generating...' : '🚀 Generate Thumbnail'}
+                {loading ? '⏳ Generating...' : geminiKey ? '🚀 Generate with Gemini' : '🚀 Generate with Pollinations'}
               </button>
 
               {loading && (
@@ -564,7 +580,7 @@ export default function Home() {
           <div className="card-header">
             <span className="card-title">Preview</span>
             <div style={{ display: 'flex', gap: '0.3rem' }}>
-              {imageUrl && <span style={{ fontSize: '0.6rem', color: '#00e5ff', padding: '0.15rem 0.4rem', background: 'rgba(0,229,255,0.1)', borderRadius: 4 }}>AI Generated</span>}
+              {imageUrl && <span style={{ fontSize: '0.6rem', color: provider === 'gemini' ? '#4285f4' : '#00e5ff', padding: '0.15rem 0.4rem', background: provider === 'gemini' ? 'rgba(66,133,244,0.1)' : 'rgba(0,229,255,0.1)', borderRadius: 4 }}>{provider === 'gemini' ? 'Gemini 2.0' : 'Pollinations'}</span>}
               <span style={{ fontSize: '0.6rem', color: '#FFD700', padding: '0.15rem 0.4rem', background: 'rgba(255,215,0,0.1)', borderRadius: 4 }}>{PRESETS.find(p => p.id === preset)?.label}</span>
             </div>
           </div>

@@ -321,14 +321,8 @@ export default function Home() {
     if (!ctx) return;
     ctx.clearRect(0, 0, 1920, 1080);
     if (bgImageRef.current) {
+      // Draw raw AI image at full quality — no filters that degrade clarity
       ctx.drawImage(bgImageRef.current, 0, 0, 1920, 1080);
-      applyColorGrading(ctx, 1920, 1080, preset);
-      // Light vignette — keeps image clear
-      const vigGrad = ctx.createRadialGradient(960, 540, 960 * 0.35, 960, 540, 960 * 0.85);
-      vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
-      vigGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
-      ctx.fillStyle = vigGrad;
-      ctx.fillRect(0, 0, 1920, 1080);
     }
     const displayText = (overlayText || topic).toUpperCase();
     drawTextBar(ctx, 1920, 1080, textPos);

@@ -51,7 +51,7 @@ function buildThumbnailPrompt(params: {
 
   const p = presets[preset] || presets.harry;
 
-  return `Ultra high quality professional YouTube thumbnail, ${intensityDesc} energy. 16:9 aspect ratio, 1280x720, sharp detailed digital art. Main subject: ${cleanSubject}, face fills 40-50% of frame, positioned slightly off-center for dynamic composition. The subject MUST have an extremely expressive face reacting to "${cleanTopic}" - shocked, amazed, or excited. Visual elements directly related to "${cleanTopic}": ${topicVisual}. Style: ${p}. Composition: subject in foreground with clean separation from background. Vibrant saturated colors that pop. The image must look like it would get millions of clicks on YouTube. Absolutely NO text, NO words, NO letters, NO watermarks in the image. Negative: blurry, low quality, photorealistic, oil painting, watermark, multiple faces, cluttered background, dull colors.`;
+  return `High quality YouTube thumbnail, 16:9 aspect ratio, 1920x1080 resolution, sharp crisp digital art, ${intensityDesc} energy. Subject: ${cleanSubject} with extremely expressive face reacting to "${cleanTopic}" - shocked, amazed, or excited, face fills 40-50% of frame. Visual elements related to "${cleanTopic}": ${topicVisual}. Style: ${p}. Sharp focus on subject, vibrant colors, clean composition, subject in foreground with clear background separation. NO text, NO words, NO letters, NO watermarks in the image. High resolution, sharp edges, clear details.`;
 }
 
 export async function POST(request: Request) {

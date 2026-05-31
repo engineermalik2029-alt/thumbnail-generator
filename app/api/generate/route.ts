@@ -12,26 +12,52 @@ function buildThumbnailPrompt(params: {
   topic: string;
   subject: string;
   preset: string;
+  intensity: number;
 }): string {
-  const { topic, subject, preset } = params;
+  const { topic, subject, preset, intensity } = params;
   const cleanTopic = topic.replace(/["""]/g, '').trim();
   const cleanSubject = subject || 'a young person with extreme shocked expression, jaw dropped, eyes wide open';
 
+  // Topic-specific visual elements based on keyword detection
+  const topicLower = cleanTopic.toLowerCase();
+  let topicVisual = '';
+  if (topicLower.includes('python') || topicLower.includes('coding') || topicLower.includes('programming') || topicLower.includes('javascript') || topicLower.includes('react') || topicLower.includes('web')) {
+    topicVisual = 'laptop with glowing code on screen, floating code snippets, binary rain, neon green and blue code elements, programming workspace';
+  } else if (topicLower.includes('gaming') || topicLower.includes('game') || topicLower.includes('fortnite') || topicLower.includes('valorant')) {
+    topicVisual = 'gaming controller, RGB lighting, gaming headset, esports arena lights, gaming PC setup';
+  } else if (topicLower.includes('ai') || topicLower.includes('artificial intelligence') || topicLower.includes('machine learning') || topicLower.includes('chatgpt')) {
+    topicVisual = 'robot brain, neural network visualization, futuristic AI interface, glowing circuits, holographic display';
+  } else if (topicLower.includes('music') || topicLower.includes('song') || topicLower.includes('singing')) {
+    topicVisual = 'musical notes floating, microphone, sound waves, concert lights, speaker cones';
+  } else if (topicLower.includes('food') || topicLower.includes('cooking') || topicLower.includes('recipe')) {
+    topicVisual = 'steaming plate of food, kitchen flames, cooking utensils, colorful ingredients';
+  } else if (topicLower.includes('fitness') || topicLower.includes('workout') || topicLower.includes('gym')) {
+    topicVisual = 'dumbbells, muscle definition, gym equipment, sweat drops, power pose';
+  } else if (topicLower.includes('travel') || topicLower.includes('vlog')) {
+    topicVisual = 'world landmarks silhouette, airplane trail, passport stamps, exotic location background';
+  } else if (topicLower.includes('money') || topicLower.includes('finance') || topicLower.includes('invest') || topicLower.includes('crypto')) {
+    topicVisual = 'floating money bills, gold coins, stock chart going up, dollar signs, luxury items';
+  } else {
+    topicVisual = `visual elements related to ${cleanTopic}, thematic props and symbols`;
+  }
+
+  const intensityDesc = intensity >= 80 ? 'EXTREME, MAXIMUM INTENSITY, over-the-top' : intensity >= 50 ? 'HIGH INTENSITY, dramatic' : 'MODERATE, clean';
+
   const presets: Record<string, string> = {
-    harry: 'professional YouTube thumbnail style, dark navy blue background (#0a0a2e), vibrant gold yellow accents (#FFD700), dramatic studio lighting with strong rim light, high contrast, bold black outlines around subject like a sticker, cell-shaded vector art, ultra clean and clickable design, CodeWithHarry inspired style',
-    tech: 'professional tech YouTube thumbnail, dark navy background, electric blue (#0066ff) and bright orange (#ff6b00) color scheme, futuristic glowing elements, circuit board accents, holographic effects, cool blue key light with warm orange rim light, sharp modern digital art style',
-    gaming: 'professional gaming YouTube thumbnail, dark charcoal background (#1a1a1a), fire red (#ff0033) and bright yellow (#ffd700) explosive energy, lightning bolts, flame effects, neon glow, dramatic stage lighting, high energy action style, esports quality',
+    harry: `professional YouTube thumbnail style, dark navy blue background (#0a0a2e), vibrant gold yellow accents (#FFD700), dramatic studio lighting with strong rim light, high contrast, bold black outlines around subject like a sticker, cell-shaded vector art, ultra clean and clickable design, CodeWithHarry inspired style. Include topic-related visual elements: ${topicVisual}`,
+    tech: `professional tech YouTube thumbnail, dark navy background, electric blue (#0066ff) and bright orange (#ff6b00) color scheme, futuristic glowing elements, holographic effects, cool blue key light with warm orange rim light, sharp modern digital art style. Include topic-related visual elements: ${topicVisual}`,
+    gaming: `professional gaming YouTube thumbnail, dark charcoal background (#1a1a1a), fire red (#ff0033) and bright yellow (#ffd700) explosive energy, lightning bolts, flame effects, neon glow, dramatic stage lighting, high energy action style, esports quality. Include topic-related visual elements: ${topicVisual}`,
   };
 
   const p = presets[preset] || presets.harry;
 
-  return `Ultra high quality professional YouTube thumbnail. 16:9 aspect ratio, 1280x720, sharp detailed digital art. Main subject: ${cleanSubject}, face fills 40-50% of frame, positioned slightly off-center for dynamic composition. The subject should have an extremely expressive face - shocked, amazed, or excited. Style: ${p}. Composition: subject in foreground with clean separation from background. The image must look like it would get millions of clicks on YouTube. Absolutely NO text, NO words, NO letters, NO watermarks in the image. Negative: blurry, low quality, photorealistic, oil painting, watermark, multiple faces, cluttered background.`;
+  return `Ultra high quality professional YouTube thumbnail, ${intensityDesc} energy. 16:9 aspect ratio, 1280x720, sharp detailed digital art. Main subject: ${cleanSubject}, face fills 40-50% of frame, positioned slightly off-center for dynamic composition. The subject MUST have an extremely expressive face reacting to "${cleanTopic}" - shocked, amazed, or excited. Visual elements directly related to "${cleanTopic}": ${topicVisual}. Style: ${p}. Composition: subject in foreground with clean separation from background. Vibrant saturated colors that pop. The image must look like it would get millions of clicks on YouTube. Absolutely NO text, NO words, NO letters, NO watermarks in the image. Negative: blurry, low quality, photorealistic, oil painting, watermark, multiple faces, cluttered background, dull colors.`;
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { topic, subjectDescription, preset = 'harry' } = body;
+    const { topic, subjectDescription, preset = 'harry', intensity = 85 } = body;
 
     if (!topic) {
       return NextResponse.json({ error: 'Video topic is required' }, { status: 400 });
@@ -41,6 +67,7 @@ export async function POST(request: Request) {
       topic,
       subject: subjectDescription || '',
       preset,
+      intensity,
     });
 
     const displayText = topic.toUpperCase();

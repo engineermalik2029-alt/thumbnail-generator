@@ -249,6 +249,7 @@ export default function Home() {
   const [subjectDesc, setSubjectDesc] = useState('');
   const [overlayText, setOverlayText] = useState('');
   const [preset, setPreset] = useState('harry');
+  const [intensity, setIntensity] = useState(85);
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [promptText, setPromptText] = useState('');
@@ -312,6 +313,7 @@ export default function Home() {
           subjectDescription: subjectDesc.trim(),
           overlayText: overlayText.trim(),
           preset,
+          intensity,
         }),
       });
       const data = (await res.json()) as GenerateResponse;
@@ -455,6 +457,13 @@ export default function Home() {
                 {showArrow ? 'Arrow ON' : 'Arrow OFF'}
               </button>
             </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Intensity: {intensity}%</label>
+            <input type="range" min="0" max="100" value={intensity}
+              onChange={(e) => setIntensity(Number(e.target.value))}
+              style={{ width: '100%', accentColor: '#ff0033' }} />
           </div>
 
           <button onClick={handleGenerate} disabled={loading || !topic.trim()} className="btn btn-primary">

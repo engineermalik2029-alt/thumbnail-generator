@@ -10,6 +10,11 @@ interface GenerateResponse {
   error?: string;
 }
 
+const DAILY_LIMIT = 500;
+const USAGE_KEY = 'tf_usage';
+const ALLTIME_KEY = 'tf_alltime';
+const DATE_KEY = 'tf_date';
+
 const SUBJECTS = [
   'a shocked young man in hoodie pointing at camera',
   'a woman with wide eyes and open mouth in surprise',
@@ -23,6 +28,40 @@ const PRESETS = [
   { id: 'tech', label: 'Tech Thriller', desc: 'Blue/orange contrast + glowing', colors: ['#0066ff', '#ff6b00', '#0a1628'] },
   { id: 'gaming', label: 'Gaming Explosive', desc: 'Red/yellow + fire/lightning', colors: ['#ff0033', '#ffd700', '#1a1a1a'] },
 ];
+
+// ========== USAGE TRACKER ==========
+
+function getUsageStats(): { today: number; allTime: number; date: string } {
+  if (typeof window === 'undefined') return { today: 0, allTime: 0, date: '' };
+  const today = new Date().toISOString().split('T')[0];
+  const storedDate = localStorage.getItem(DATE_KEY);
+  const storedUsage = parseInt(localStorage.getItem(USAGE_KEY) || '0', 10);
+  const storedAllTime = parseInt(localStorage.getItem(ALLTIME_KEY) || '0', 10);
+
+  // If stored date doesn't match today, reset daily count
+  if (storedDate !== today) {
+    localStorage.setItem(DATE_KEY, today);
+    localStorage.setItem(USAGE_KEY, '0');
+    return { today: 0, allTime: storedAllTime, date: today };
+  }
+  return { today: storedUsage, allTime: storedAllTime, date: storedDate || today };
+}
+
+function incrementUsage(): void {
+  const stats = getUsageStats();
+  const today = stats.date || new Date().toISOString().split('T')[0];
+  localStorage.setItem(DATE_KEY, today);
+  localStorage.setItem(USAGE_KEY, String(stats.today + 1));
+  localStorage.setItem(ALLTIME_KEY, String(stats.allTime + 1));
+}
+
+function resetUsage(): void {
+  const allTime = parseInt(localStorage.getItem(ALLTIME_KEY) || '0', 10);
+  localStorage.setItem(USAGE_KEY, '0');
+  // Keep all-time when resetting
+}
+
+// ========== CANVAS RENDERING ==========
 
 function drawTextBar(ctx: CanvasRenderingContext2D, w: number, h: number, pos: string) {
   const barHeight = h * 0.2;
@@ -165,13 +204,26 @@ export default function Home() {
   const [toast, setToast] = useState('');
   const [textPos, setTextPos] = useState('bottom');
   const [showArrow, setShowArrow] = useState(false);
+  const [usageToday, setUsageToday] = useState(0);
+  const [usageAllTime, setUsageAllTime] = useState(0);
+  const [showDevTools, setShowDevTools] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
 
+  // Initialize usage stats
   useEffect(() => {
     const saved = localStorage.getItem('gemini_api_key');
     if (saved) setApiKey(saved);
+    const stats = getUsageStats();
+    setUsageToday(stats.today);
+    setUsageAllTime(stats.allTime);
   }, []);
+
+  function refreshUsage() {
+    const stats = getUsageStats();
+    setUsageToday(stats.today);
+    setUsageAllTime(stats.allTime);
+  }
 
   function showToastMsg(msg: string) {
     setToast(msg);
@@ -195,10 +247,19 @@ export default function Home() {
 
   async function handleGenerate() {
     if (!topic.trim()) return;
+
+    // Check daily limit before generating
+    const stats = getUsageStats();
+    if (stats.today >= DAILY_LIMIT) {
+      setError('Daily free limit reached (500 thumbnails). Please try again tomorrow.');
+      return;
+    }
+
     if (!apiKey.trim()) {
       setError('Please enter your Gemini API key (free from https://aistudio.google.com/apikey)');
       return;
     }
+
     localStorage.setItem('gemini_api_key', apiKey.trim());
     setLoading(true);
     setImageUrl('');
@@ -225,6 +286,9 @@ export default function Home() {
       setImageUrl(data.imageUrl || '');
       setPromptText(data.prompt || '');
       if (data.imageUrl) {
+        // Increment usage on successful generation
+        incrementUsage();
+        refreshUsage();
         const img = await loadImage(data.imageUrl);
         bgImageRef.current = img;
         renderCanvas();
@@ -247,6 +311,15 @@ export default function Home() {
     setTimeout(() => document.body.removeChild(a), 100);
     showToastMsg('Downloaded!');
   }
+
+  function handleResetCounter() {
+    resetUsage();
+    refreshUsage();
+    showToastMsg('Counter reset for testing');
+  }
+
+  const remaining = DAILY_LIMIT - usageToday;
+  const usagePercent = Math.round((usageToday / DAILY_LIMIT) * 100);
 
   return (
     <div className="main-container">
@@ -272,6 +345,7 @@ export default function Home() {
       </section>
 
       <section id="generator" className="grid-2">
+        {/* Settings Panel */}
         <div className="card">
           <div className="card-header"><span className="card-title">Settings</span></div>
 
@@ -358,8 +432,8 @@ export default function Home() {
             </div>
           </div>
 
-          <button onClick={handleGenerate} disabled={loading || !topic.trim()} className="btn btn-primary">
-            {loading ? 'Generating...' : 'Generate Thumbnail'}
+          <button onClick={handleGenerate} disabled={loading || !topic.trim() || remaining <= 0} className="btn btn-primary">
+            {loading ? 'Generating...' : remaining <= 0 ? 'Daily limit reached' : 'Generate Thumbnail'}
           </button>
 
           {loading && (
@@ -377,6 +451,7 @@ export default function Home() {
           )}
         </div>
 
+        {/* Preview + Stats Panel */}
         <div className="card">
           <div className="card-header">
             <span className="card-title">Preview</span>
@@ -405,8 +480,95 @@ export default function Home() {
             </div>
           )}
 
+          {/* Usage Statistics Card */}
+          <div style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '1rem',
+            marginTop: '0.5rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <span style={{ fontSize: '1.1rem' }}>📊</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Statistics
+              </span>
+              <div style={{
+                marginLeft: 'auto',
+                fontSize: '0.65rem',
+                color: 'var(--text-muted)',
+                padding: '0.15rem 0.5rem',
+                borderRadius: '100px',
+                background: 'rgba(255,255,255,0.05)',
+              }}>
+                Daily limit
+              </div>
+            </div>
+
+            {/* Today's usage bar */}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Today</span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: remaining > 0 ? '#00e676' : '#ff1744' }}>
+                  {usageToday} / {DAILY_LIMIT}
+                </span>
+              </div>
+              <div style={{
+                width: '100%', height: 6,
+                borderRadius: 10,
+                background: 'rgba(255,255,255,0.08)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: usagePercent + '%',
+                  height: '100%',
+                  borderRadius: 10,
+                  background: remaining > 50 ? 'linear-gradient(90deg, #00e676, #00c853)' :
+                               remaining > 10 ? 'linear-gradient(90deg, #ffd700, #ff9100)' :
+                               'linear-gradient(90deg, #ff9100, #ff1744)',
+                  transition: 'width 0.3s ease',
+                }} />
+              </div>
+            </div>
+
+            {/* Stats rows */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <div style={{
+                background: 'rgba(0,230,118,0.08)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.5rem',
+              }}>
+                <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Remaining</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#00e676' }}>{Math.max(0, remaining)}</div>
+              </div>
+              <div style={{
+                background: 'rgba(108,99,255,0.08)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.5rem',
+              }}>
+                <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>All Time</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#6c63ff' }}>{usageAllTime}</div>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.5rem', textAlign: 'center' }}>
+              Resets daily at midnight
+            </div>
+
+            {/* Hidden dev tools - click 5 times on "Statistics" to show */}
+            <div style={{ display: showDevTools ? 'block' : 'none', marginTop: '0.5rem', textAlign: 'center' }}>
+              <button onClick={handleResetCounter} style={{
+                background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.2)',
+                color: '#ff6666', padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-sm)',
+                fontSize: '0.65rem', cursor: 'pointer',
+              }}>
+                🔄 Reset Daily Counter
+              </button>
+            </div>
+          </div>
+
           {promptText && (
-            <details>
+            <details style={{ marginTop: '0.5rem' }}>
               <summary style={{ fontSize: '0.7rem', color: 'var(--text-muted)', cursor: 'pointer' }}>View AI Prompt</summary>
               <pre style={{ fontSize: '0.65rem', maxHeight: '100px', overflowY: 'auto', marginTop: '0.3rem', color: 'var(--text-secondary)' }}>{promptText}</pre>
             </details>
@@ -419,6 +581,12 @@ export default function Home() {
       </footer>
 
       <div className={'toast ' + (toast ? 'visible' : '')}>{toast}</div>
+
+      {/* Hidden click target for dev tools */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, padding: '10px', cursor: 'pointer', zIndex: 999, opacity: 0.05, fontSize: '10px' }}
+        onClick={() => setShowDevTools(!showDevTools)} title="Toggle Dev Tools">
+        dev
+      </div>
     </div>
   );
 }

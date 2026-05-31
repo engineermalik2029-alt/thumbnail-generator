@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
+import https from 'https';
+import http from 'http';
 
 /**
  * YouTube Thumbnail Generator using Pollinations API
  * Completely free, no API key required
+ * Proxies image through server to avoid CORS issues in browser canvas
  */
 
 function buildThumbnailPrompt(params: {
@@ -56,10 +59,13 @@ export async function POST(request: Request) {
 
     // Pollinations API - completely free, no API key needed
     const encodedPrompt = encodeURIComponent(prompt);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&model=flux&nologo=true`;
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&model=flux&nologo=true`;
+
+    // Fetch image server-side and convert to base64 data URL to avoid CORS issues
+    const imageBase64 = await fetchImageAsBase64(pollinationsUrl);
 
     return NextResponse.json({
-      imageUrl,
+      imageUrl: imageBase64,
       topic: displayText,
       prompt,
       preset,
@@ -69,4 +75,26 @@ export async function POST(request: Request) {
     console.error('Error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
   }
+}
+
+function fetchImageAsBase64(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith('https') ? https : http;
+    client.get(url, { timeout: 60000 }, (res) => {
+      // Handle redirects
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        fetchImageAsBase64(res.headers.location).then(resolve).catch(reject);
+        return;
+      }
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const buffer = Buffer.concat(chunks);
+        const contentType = res.headers['content-type'] || 'image/jpeg';
+        const base64 = buffer.toString('base64');
+        resolve(`data:${contentType};base64,${base64}`);
+      });
+      res.on('error', reject);
+    }).on('error', reject);
+  });
 }

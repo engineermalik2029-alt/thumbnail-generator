@@ -72,10 +72,10 @@ export async function POST(request: Request) {
 
     const displayText = topic.toUpperCase();
 
-    // Pollinations API - completely free, no API key needed
+    // Pollinations API - use turbo model for highest quality output
     const seed = Math.floor(Math.random() * 100000);
     const encodedPrompt = encodeURIComponent(prompt);
-    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&model=flux&nologo=true&enhance=true&seed=${seed}`;
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1920&height=1080&model=turbo&nologo=true&enhance=true&seed=${seed}`;
 
     // Fetch image server-side and convert to base64 data URL to avoid CORS issues
     const imageBase64 = await fetchImageAsBase64(pollinationsUrl);

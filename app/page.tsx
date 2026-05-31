@@ -99,15 +99,38 @@ function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillRect(0, 0, w, h);
 }
 
+function applySharpen(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+  const output = new Uint8ClampedArray(data);
+  const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        let val = 0;
+        for (let ky = -1; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++) {
+            val += data[((y + ky) * w + (x + kx)) * 4 + c] * kernel[(ky + 1) * 3 + (kx + 1)];
+          }
+        }
+        output[idx + c] = Math.min(255, Math.max(0, val));
+      }
+    }
+  }
+  ctx.putImageData(new ImageData(output, w, h), 0, 0);
+}
+
 function applyColorGrading(ctx: CanvasRenderingContext2D, w: number, h: number, preset: string) {
   const imageData = ctx.getImageData(0, 0, w, h);
   const data = imageData.data;
-  const contrast = 1.35;
-  const saturation = 1.5;
+  // Gentle contrast and saturation — keeps image clear while making it pop
+  const contrast = 1.15;
+  const saturation = 1.25;
   const tints: Record<string, number[]> = {
-    harry: [0.02, 0.01, -0.03], tech: [-0.02, 0.0, 0.04],
-    gaming: [0.03, -0.01, -0.03], cinematic: [0.03, 0.0, -0.02],
-    neon: [0.02, -0.02, 0.04], minimal: [0, 0, 0],
+    harry: [0.01, 0.005, -0.015], tech: [-0.01, 0.0, 0.02],
+    gaming: [0.015, -0.005, -0.015], cinematic: [0.015, 0.0, -0.01],
+    neon: [0.01, -0.01, 0.02], minimal: [0, 0, 0],
   };
   const tint = tints[preset] || [0, 0, 0];
   for (let i = 0; i < data.length; i += 4) {
@@ -125,6 +148,8 @@ function applyColorGrading(ctx: CanvasRenderingContext2D, w: number, h: number, 
     data[i] = r; data[i + 1] = g; data[i + 2] = b;
   }
   ctx.putImageData(imageData, 0, 0);
+  // Sharpen after color grading for crisp results
+  applySharpen(ctx, w, h);
 }
 
 function drawTextBar(ctx: CanvasRenderingContext2D, w: number, h: number, pos: string) {
@@ -298,7 +323,12 @@ export default function Home() {
     if (bgImageRef.current) {
       ctx.drawImage(bgImageRef.current, 0, 0, 1920, 1080);
       applyColorGrading(ctx, 1920, 1080, preset);
-      drawVignette(ctx, 1920, 1080);
+      // Light vignette — keeps image clear
+      const vigGrad = ctx.createRadialGradient(960, 540, 960 * 0.35, 960, 540, 960 * 0.85);
+      vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      vigGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = vigGrad;
+      ctx.fillRect(0, 0, 1920, 1080);
     }
     const displayText = (overlayText || topic).toUpperCase();
     drawTextBar(ctx, 1920, 1080, textPos);

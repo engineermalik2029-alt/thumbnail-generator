@@ -29,16 +29,12 @@ const PRESETS = [
   { id: 'gaming', label: 'Gaming Explosive', desc: 'Red/yellow + fire/lightning', colors: ['#ff0033', '#ffd700', '#1a1a1a'] },
 ];
 
-// ========== USAGE TRACKER ==========
-
 function getUsageStats(): { today: number; allTime: number; date: string } {
   if (typeof window === 'undefined') return { today: 0, allTime: 0, date: '' };
   const today = new Date().toISOString().split('T')[0];
   const storedDate = localStorage.getItem(DATE_KEY);
   const storedUsage = parseInt(localStorage.getItem(USAGE_KEY) || '0', 10);
   const storedAllTime = parseInt(localStorage.getItem(ALLTIME_KEY) || '0', 10);
-
-  // If stored date doesn't match today, reset daily count
   if (storedDate !== today) {
     localStorage.setItem(DATE_KEY, today);
     localStorage.setItem(USAGE_KEY, '0');
@@ -54,14 +50,6 @@ function incrementUsage(): void {
   localStorage.setItem(USAGE_KEY, String(stats.today + 1));
   localStorage.setItem(ALLTIME_KEY, String(stats.allTime + 1));
 }
-
-function resetUsage(): void {
-  const allTime = parseInt(localStorage.getItem(ALLTIME_KEY) || '0', 10);
-  localStorage.setItem(USAGE_KEY, '0');
-  // Keep all-time when resetting
-}
-
-// ========== CANVAS RENDERING ==========
 
 function drawTextBar(ctx: CanvasRenderingContext2D, w: number, h: number, pos: string) {
   const barHeight = h * 0.2;
@@ -196,7 +184,6 @@ export default function Home() {
   const [subjectDesc, setSubjectDesc] = useState('');
   const [overlayText, setOverlayText] = useState('');
   const [preset, setPreset] = useState('harry');
-  const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [promptText, setPromptText] = useState('');
@@ -210,10 +197,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
 
-  // Initialize usage stats
   useEffect(() => {
-    const saved = localStorage.getItem('gemini_api_key');
-    if (saved) setApiKey(saved);
     const stats = getUsageStats();
     setUsageToday(stats.today);
     setUsageAllTime(stats.allTime);
@@ -247,20 +231,6 @@ export default function Home() {
 
   async function handleGenerate() {
     if (!topic.trim()) return;
-
-    // Check daily limit before generating
-    const stats = getUsageStats();
-    if (stats.today >= DAILY_LIMIT) {
-      setError('Daily free limit reached (500 thumbnails). Please try again tomorrow.');
-      return;
-    }
-
-    if (!apiKey.trim()) {
-      setError('Please enter your Gemini API key (free from https://aistudio.google.com/apikey)');
-      return;
-    }
-
-    localStorage.setItem('gemini_api_key', apiKey.trim());
     setLoading(true);
     setImageUrl('');
     setPromptText('');
@@ -274,24 +244,21 @@ export default function Home() {
           topic: topic.trim(),
           subjectDescription: subjectDesc.trim(),
           overlayText: overlayText.trim(),
-          imageModel: 'flux',
           preset,
-          textPosition: textPos,
-          apiKey: apiKey.trim(),
-          variant: 0,
         }),
       });
       const data = (await res.json()) as GenerateResponse;
       if (!res.ok) throw new Error(data.error || 'Generation failed');
-      setImageUrl(data.imageUrl || '');
-      setPromptText(data.prompt || '');
+
+      // Pollinations returns a URL directly - fetch it as blob for canvas
       if (data.imageUrl) {
-        // Increment usage on successful generation
-        incrementUsage();
-        refreshUsage();
         const img = await loadImage(data.imageUrl);
         bgImageRef.current = img;
+        setImageUrl(data.imageUrl);
+        setPromptText(data.prompt || '');
         renderCanvas();
+        incrementUsage();
+        refreshUsage();
       }
     } catch (e: any) {
       setError(e.message);
@@ -313,7 +280,8 @@ export default function Home() {
   }
 
   function handleResetCounter() {
-    resetUsage();
+    const allTime = parseInt(localStorage.getItem(ALLTIME_KEY) || '0', 10);
+    localStorage.setItem(USAGE_KEY, '0');
     refreshUsage();
     showToastMsg('Counter reset for testing');
   }
@@ -329,34 +297,24 @@ export default function Home() {
           <span className="nav-logo-text">Thumbnail<span>Forge</span></span>
         </a>
         <div className="nav-actions">
-          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Gemini 2.0 Flash</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Pollinations AI • Free</span>
         </div>
       </nav>
 
       <section className="hero">
         <div className="hero-badge"><span className="dot" /> YouTube Thumbnail Generator</div>
         <h1 className="hero-title">
-          <span className="gradient-text">Pro YouTube Thumbnails with Gemini AI</span>
+          <span className="gradient-text">Pro YouTube Thumbnails with AI</span>
         </h1>
         <p className="hero-subtitle">
           AI generates subject + background — then we add bold text, arrows, and effects.
-          100% free with your Gemini API key (500+ images/day).
+          Completely free, no API key needed.
         </p>
       </section>
 
       <section id="generator" className="grid-2">
-        {/* Settings Panel */}
         <div className="card">
           <div className="card-header"><span className="card-title">Settings</span></div>
-
-          <div className="form-group">
-            <label className="form-label">Key <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" style={{ color: '#00e5ff', fontSize: '0.7rem' }}>Get free key</a></label>
-            <div className="input-wrapper">
-              <span className="input-icon">Key</span>
-              <input type="password" placeholder="Paste Gemini API key"
-                value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="input-field" />
-            </div>
-          </div>
 
           <div className="form-group">
             <label className="form-label">Video Topic</label>
@@ -432,13 +390,13 @@ export default function Home() {
             </div>
           </div>
 
-          <button onClick={handleGenerate} disabled={loading || !topic.trim() || remaining <= 0} className="btn btn-primary">
-            {loading ? 'Generating...' : remaining <= 0 ? 'Daily limit reached' : 'Generate Thumbnail'}
+          <button onClick={handleGenerate} disabled={loading || !topic.trim()} className="btn btn-primary">
+            {loading ? 'Generating...' : 'Generate Thumbnail'}
           </button>
 
           {loading && (
             <div className="loading-container">
-              <div className="loading-text">Gemini AI creating thumbnail (10-20s)...</div>
+              <div className="loading-text">AI creating thumbnail...</div>
               <div className="loading-bar-container"><div className="loading-bar" /></div>
             </div>
           )}
@@ -451,12 +409,11 @@ export default function Home() {
           )}
         </div>
 
-        {/* Preview + Stats Panel */}
         <div className="card">
           <div className="card-header">
             <span className="card-title">Preview</span>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              {imageUrl && <span style={{ fontSize: '0.65rem', color: '#00e5ff' }}>Gemini</span>}
+              {imageUrl && <span style={{ fontSize: '0.65rem', color: '#00e5ff' }}>AI</span>}
               <span style={{ fontSize: '0.65rem', color: '#FFD700' }}>{PRESETS.find(p => p.id === preset)?.label}</span>
             </div>
           </div>
@@ -465,7 +422,7 @@ export default function Home() {
             <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-muted)' }}>
               <span style={{ fontSize: '4rem', opacity: 0.3 }}>🎬</span>
               <h3 style={{ color: 'var(--text-secondary)' }}>Your thumbnail appears here</h3>
-              <p style={{ fontSize: '0.85rem' }}>Enter API key and topic, then generate</p>
+              <p style={{ fontSize: '0.85rem' }}>Enter topic and generate</p>
             </div>
           )}
 
@@ -501,11 +458,10 @@ export default function Home() {
                 borderRadius: '100px',
                 background: 'rgba(255,255,255,0.05)',
               }}>
-                Daily limit
+                Daily usage
               </div>
             </div>
 
-            {/* Today's usage bar */}
             <div style={{ marginBottom: '0.75rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Today</span>
@@ -531,7 +487,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Stats rows */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
               <div style={{
                 background: 'rgba(0,230,118,0.08)',
@@ -555,14 +510,13 @@ export default function Home() {
               Resets daily at midnight
             </div>
 
-            {/* Hidden dev tools - click 5 times on "Statistics" to show */}
             <div style={{ display: showDevTools ? 'block' : 'none', marginTop: '0.5rem', textAlign: 'center' }}>
               <button onClick={handleResetCounter} style={{
                 background: 'rgba(255,68,68,0.1)', border: '1px solid rgba(255,68,68,0.2)',
                 color: '#ff6666', padding: '0.3rem 0.75rem', borderRadius: 'var(--radius-sm)',
                 fontSize: '0.65rem', cursor: 'pointer',
               }}>
-                🔄 Reset Daily Counter
+                Reset Daily Counter
               </button>
             </div>
           </div>
@@ -577,12 +531,11 @@ export default function Home() {
       </section>
 
       <footer className="footer">
-        <p>Powered by <a href="https://aistudio.google.com" target="_blank">Google Gemini 2.0 Flash</a></p>
+        <p>Powered by <a href="https://pollinations.ai" target="_blank">Pollinations AI</a> (free)</p>
       </footer>
 
       <div className={'toast ' + (toast ? 'visible' : '')}>{toast}</div>
 
-      {/* Hidden click target for dev tools */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, padding: '10px', cursor: 'pointer', zIndex: 999, opacity: 0.05, fontSize: '10px' }}
         onClick={() => setShowDevTools(!showDevTools)} title="Toggle Dev Tools">
         dev

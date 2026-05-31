@@ -51,20 +51,78 @@ function incrementUsage(): void {
   localStorage.setItem(ALLTIME_KEY, String(stats.allTime + 1));
 }
 
+function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  const gradient = ctx.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.7);
+  gradient.addColorStop(0, 'rgba(0,0,0,0)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, w, h);
+}
+
+function applyColorGrading(ctx: CanvasRenderingContext2D, w: number, h: number, preset: string) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
+  const contrast = 1.35;
+  const saturation = 1.5;
+
+  // Preset-specific color tint
+  const tint = preset === 'harry' ? [0.02, 0.01, -0.03] :
+               preset === 'tech' ? [-0.02, 0.0, 0.04] :
+               preset === 'gaming' ? [0.03, -0.01, -0.03] : [0, 0, 0];
+
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i], g = data[i + 1], b = data[i + 2];
+
+    // Contrast boost
+    r = Math.min(255, Math.max(0, (r - 128) * contrast + 128));
+    g = Math.min(255, Math.max(0, (g - 128) * contrast + 128));
+    b = Math.min(255, Math.max(0, (b - 128) * contrast + 128));
+
+    // Saturation boost
+    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = Math.min(255, Math.max(0, gray + (r - gray) * saturation));
+    g = Math.min(255, Math.max(0, gray + (g - gray) * saturation));
+    b = Math.min(255, Math.max(0, gray + (b - gray) * saturation));
+
+    // Preset color tint
+    r = Math.min(255, Math.max(0, r + tint[0] * 255));
+    g = Math.min(255, Math.max(0, g + tint[1] * 255));
+    b = Math.min(255, Math.max(0, b + tint[2] * 255));
+
+    data[i] = r;
+    data[i + 1] = g;
+    data[i + 2] = b;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
 function drawTextBar(ctx: CanvasRenderingContext2D, w: number, h: number, pos: string) {
-  const barHeight = h * 0.2;
+  const barHeight = h * 0.22;
   let y: number;
   if (pos === 'top') y = 0;
   else if (pos === 'center') y = h / 2 - barHeight / 2;
   else y = h - barHeight;
+
+  // Multi-layer dark gradient for depth
   const grad = ctx.createLinearGradient(0, y, 0, y + barHeight);
-  grad.addColorStop(0, 'rgba(0,0,0,0.85)');
-  grad.addColorStop(0.5, 'rgba(0,0,0,0.7)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.85)');
+  grad.addColorStop(0, 'rgba(0,0,0,0.92)');
+  grad.addColorStop(0.15, 'rgba(0,0,0,0.82)');
+  grad.addColorStop(0.5, 'rgba(0,0,0,0.72)');
+  grad.addColorStop(0.85, 'rgba(0,0,0,0.82)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.92)');
   ctx.fillStyle = grad;
   ctx.fillRect(0, y, w, barHeight);
-  ctx.fillStyle = 'rgba(255,215,0,0.3)';
-  ctx.fillRect(0, y, w, 3);
+
+  // Gold accent lines top and bottom
+  const lineGrad = ctx.createLinearGradient(0, y, w, y);
+  lineGrad.addColorStop(0, 'rgba(255,215,0,0)');
+  lineGrad.addColorStop(0.3, 'rgba(255,215,0,0.6)');
+  lineGrad.addColorStop(0.7, 'rgba(255,215,0,0.6)');
+  lineGrad.addColorStop(1, 'rgba(255,215,0,0)');
+  ctx.fillStyle = lineGrad;
+  ctx.fillRect(0, y, w, 4);
+  ctx.fillRect(0, y + barHeight - 4, w, 4);
 }
 
 function drawBoldText(ctx: CanvasRenderingContext2D, text: string, w: number, h: number, pos: string) {
@@ -123,10 +181,17 @@ function drawBoldText(ctx: CanvasRenderingContext2D, text: string, w: number, h:
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-    ctx.fillStyle = '#FFFFFF';
+    // Main fill — gold gradient for Harry preset
+    const textGrad = ctx.createLinearGradient(w / 2 - 200, y - fs, w / 2 + 200, y + fs);
+    textGrad.addColorStop(0, '#FFD700');
+    textGrad.addColorStop(0.5, '#FFFFFF');
+    textGrad.addColorStop(1, '#FFD700');
+    ctx.fillStyle = textGrad;
     ctx.fillText(line, w / 2, y);
-    ctx.fillStyle = 'rgba(255,215,0,0.08)';
-    ctx.fillText(line, w / 2, y - 1);
+
+    // Subtle highlight on top
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillText(line, w / 2, y - 2);
   }
 }
 
@@ -222,6 +287,8 @@ export default function Home() {
     ctx.clearRect(0, 0, 1920, 1080);
     if (bgImageRef.current) {
       ctx.drawImage(bgImageRef.current, 0, 0, 1920, 1080);
+      applyColorGrading(ctx, 1920, 1080, preset);
+      drawVignette(ctx, 1920, 1080);
     }
     const displayText = (overlayText || topic).toUpperCase();
     drawTextBar(ctx, 1920, 1080, textPos);

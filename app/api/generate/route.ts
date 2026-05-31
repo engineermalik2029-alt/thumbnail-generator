@@ -15,29 +15,17 @@ function buildThumbnailPrompt(params: {
 }): string {
   const { topic, subject, preset } = params;
   const cleanTopic = topic.replace(/["""]/g, '').trim();
-  const cleanSubject = subject || 'a person with an extreme shocked expression';
+  const cleanSubject = subject || 'a young person with extreme shocked expression, jaw dropped, eyes wide open';
 
-  const presets: Record<string, { colors: string; lighting: string; style: string }> = {
-    harry: {
-      colors: 'bold yellow (#FFD700) + deep dark blue (#0a0a2e) + white',
-      lighting: 'dramatic studio lighting, strong rim light, high contrast',
-      style: 'CodeWithHarry style, dark background, vibrant yellow accents, ultra clean and clickable',
-    },
-    tech: {
-      colors: 'electric blue (#0066ff) + bright orange (#ff6b00) + dark navy',
-      lighting: 'cool blue key light with warm orange rim light, futuristic glow',
-      style: 'tech YouTube style, blue/orange contrast, glowing futuristic elements, sharp modern look',
-    },
-    gaming: {
-      colors: 'fire red (#ff0033) + bright yellow (#ffd700) + dark charcoal',
-      lighting: 'dramatic red and yellow stage lighting, explosive energy, neon glow',
-      style: 'gaming YouTube style, red/yellow explosive energy, dynamic high-energy clickable thumbnail',
-    },
+  const presets: Record<string, string> = {
+    harry: 'professional YouTube thumbnail style, dark navy blue background (#0a0a2e), vibrant gold yellow accents (#FFD700), dramatic studio lighting with strong rim light, high contrast, bold black outlines around subject like a sticker, cell-shaded vector art, ultra clean and clickable design, CodeWithHarry inspired style',
+    tech: 'professional tech YouTube thumbnail, dark navy background, electric blue (#0066ff) and bright orange (#ff6b00) color scheme, futuristic glowing elements, circuit board accents, holographic effects, cool blue key light with warm orange rim light, sharp modern digital art style',
+    gaming: 'professional gaming YouTube thumbnail, dark charcoal background (#1a1a1a), fire red (#ff0033) and bright yellow (#ffd700) explosive energy, lightning bolts, flame effects, neon glow, dramatic stage lighting, high energy action style, esports quality',
   };
 
   const p = presets[preset] || presets.harry;
 
-  return `Create a YouTube thumbnail image. 16:9 aspect ratio, 1280x720, high resolution. Subject: ${cleanSubject} with an extreme, over-the-top facial expression - shocked, screaming, or intense. Face fills about 40% of the frame, positioned center. Background: simple, stylized, slightly blurred dark background relating to "${cleanTopic}". Colors: vibrant, high contrast, using ${p.colors}. Lighting: ${p.lighting}. Style: ${p.style}, digital art, bold black outlines, cell-shaded, pop effect, like a pro YouTube thumbnail. Do NOT include any text, letters, or words in the image. Negative prompts: photorealism, oil painting, watercolor, blurry, low resolution, multiple faces, cluttered, flat lighting.`;
+  return `Ultra high quality professional YouTube thumbnail. 16:9 aspect ratio, 1280x720, sharp detailed digital art. Main subject: ${cleanSubject}, face fills 40-50% of frame, positioned slightly off-center for dynamic composition. The subject should have an extremely expressive face - shocked, amazed, or excited. Style: ${p}. Composition: subject in foreground with clean separation from background. The image must look like it would get millions of clicks on YouTube. Absolutely NO text, NO words, NO letters, NO watermarks in the image. Negative: blurry, low quality, photorealistic, oil painting, watermark, multiple faces, cluttered background.`;
 }
 
 export async function POST(request: Request) {
@@ -58,8 +46,9 @@ export async function POST(request: Request) {
     const displayText = topic.toUpperCase();
 
     // Pollinations API - completely free, no API key needed
+    const seed = Math.floor(Math.random() * 100000);
     const encodedPrompt = encodeURIComponent(prompt);
-    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&model=flux&nologo=true`;
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1280&height=720&model=flux&nologo=true&enhance=true&seed=${seed}`;
 
     // Fetch image server-side and convert to base64 data URL to avoid CORS issues
     const imageBase64 = await fetchImageAsBase64(pollinationsUrl);
@@ -80,7 +69,7 @@ export async function POST(request: Request) {
 function fetchImageAsBase64(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const client = url.startsWith('https') ? https : http;
-    client.get(url, { timeout: 60000 }, (res) => {
+    client.get(url, { timeout: 120000 }, (res) => {
       // Handle redirects
       if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         fetchImageAsBase64(res.headers.location).then(resolve).catch(reject);

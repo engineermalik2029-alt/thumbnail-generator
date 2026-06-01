@@ -164,10 +164,16 @@ export async function POST(request: Request) {
     let imageBase64: string;
     let provider: string;
 
-    // Use Gemini if API key provided, otherwise use Pollinations (free)
-    if (effectiveApiKey && effectiveApiKey.trim().length > 10) {
-      imageBase64 = await generateWithGemini(prompt, effectiveApiKey.trim());
-      provider = 'gemini';
+    // Use Gemini if real API key provided, otherwise use Pollinations (free)
+    if (effectiveApiKey && effectiveApiKey.trim().length > 10 && !effectiveApiKey.includes('PASTE_YOUR')) {
+      try {
+        imageBase64 = await generateWithGemini(prompt, effectiveApiKey.trim());
+        provider = 'gemini';
+      } catch (geminiErr: any) {
+        console.warn('Gemini failed, falling back to Pollinations:', geminiErr.message);
+        imageBase64 = await generateWithPollinations(prompt);
+        provider = 'pollinations (Gemini unavailable: ' + geminiErr.message + ')';
+      }
     } else {
       imageBase64 = await generateWithPollinations(prompt);
       provider = 'pollinations';

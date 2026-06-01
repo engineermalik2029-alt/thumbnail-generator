@@ -4,7 +4,8 @@ import http from 'http';
 
 /**
  * YouTube Thumbnail Generator
- * Supports: Google Gemini 2.5 Flash Image (with API key) or Pollinations AI (free, no key)
+ * Supports: Google Gemini (with API key) or Pollinations AI (free, no key)
+ * Uses gemini-2.5-flash-image or gemini-2.0-flash-exp-image-generation model
  * Proxies image through server to avoid CORS issues
  */
 
@@ -53,7 +54,14 @@ function buildThumbnailPrompt(params: {
   return `${cleanSubject}, extremely expressive face reacting to ${cleanTopic}, shocked amazed excited, face fills 40-50 percent of frame, centered. Background elements: ${topicVisual}. ${intensityDesc} energy. Style: ${p}. Sharp focus, vibrant saturated colors, clean composition, professional youtube thumbnail, 16:9 ratio. No text no words no letters no watermarks.`;
 }
 
-// Generate image using Google Gemini 2.5 Flash Image API
+// Available Gemini models that support image generation (tried in order)
+const GEMINI_MODELS = [
+  'gemini-2.5-flash-image',
+  'gemini-2.0-flash-exp-image-generation',
+  'gemini-2.0-flash-exp',
+];
+
+// Generate image using Google Gemini API
 async function generateWithGemini(prompt: string, apiKey: string): Promise<string> {
   const geminiPrompt = `Generate a YouTube thumbnail image based on this description: ${prompt}. The image should be 1920x1080, high quality, vibrant colors, professional look, suitable for a YouTube thumbnail.`;
 
@@ -64,10 +72,27 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
     },
   });
 
+  // Try each model in order until one works
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      const result = await tryGeminiModel(modelName, body, apiKey);
+      return result;
+    } catch (e: any) {
+      // If this is not a "model not found" error, it's a real API error
+      if (!e.message.includes('not found') && !e.message.includes('not supported')) {
+        throw e;
+      }
+      // Otherwise try next model
+    }
+  }
+  throw new Error('No available Gemini model found for image generation');
+}
+
+async function tryGeminiModel(modelName: string, body: string, apiKey: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
       timeout: 120000,

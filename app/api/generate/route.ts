@@ -124,18 +124,36 @@ Output ONLY the prompt description, nothing else. Max 200 words.`;
 }
 
 // Generate image using Pollinations API (free, no key needed)
-async function generateWithPollinations(prompt: string): Promise<string> {
+async function generateWithPollinations(prompt: string, width: number = 1920, height: number = 1080): Promise<string> {
   const seed = Math.floor(Math.random() * 100000);
-  const encodedPrompt = encodeURIComponent(prompt);
-  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1920&height=1080&model=flux-realism&nologo=true&enhance=true&seed=${seed}`;
+  const encodedPrompt = encodeURIComponent(prompt + ' ultra quality, 8K, super detailed, professional');
+  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=flux-realism&nologo=true&enhance=true&seed=${seed}`;
   return fetchImageAsBase64(url);
 }
+
+// Aspect ratio definitions with exact dimensions
+export const ASPECT_RATIOS = {
+  yt: { label: 'YouTube Thumbnail 16:9', w: 1280, h: 720 },
+  ig_square: { label: 'Instagram Square 1:1', w: 1080, h: 1080 },
+  ig_story: { label: 'Instagram Story 9:16', w: 1080, h: 1920 },
+  tiktok: { label: 'TikTok/Shorts 9:16', w: 1080, h: 1920 },
+  twitter_card: { label: 'Twitter Card 16:9', w: 1280, h: 720 },
+  facebook: { label: 'Facebook 1.91:1', w: 1200, h: 630 },
+  linkedin: { label: 'LinkedIn Banner 4:1', w: 1584, h: 396 },
+  pinterest: { label: 'Pinterest Pin 2:3', w: 1000, h: 1500 },
+  whatsapp: { label: 'WhatsApp Status 9:16', w: 1080, h: 1920 },
+  snapchat: { label: 'Snapchat 9:16', w: 1080, h: 1920 },
+  yt_shorts: { label: 'YouTube Shorts 9:16', w: 1080, h: 1920 },
+  twitter_post: { label: 'Twitter Post 16:9', w: 1280, h: 720 },
+  ultra_wide: { label: 'ULTRA WIDE 21:9', w: 2560, h: 1080 },
+  cinema: { label: 'CINEMA 2.39:1', w: 2560, h: 1072 },
+  banner: { label: 'BANNER 3:1', w: 1920, h: 640 },
+};
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { topic, subjectDescription, preset = 'harry', intensity = 85, geminiApiKey = '' } = body;
-    // Check environment variable as fallback (set in .env.local or system environment)
+    const { topic, subjectDescription, preset = 'harry', intensity = 85, geminiApiKey = '', aspectRatio = 'yt', customWidth, customHeight } = body;
     const envApiKey = process.env.GEMINI_API_KEY || '';
     const effectiveApiKey = geminiApiKey || envApiKey;
 
@@ -151,6 +169,17 @@ export async function POST(request: Request) {
     });
 
     const displayText = topic.toUpperCase();
+
+    // Determine final dimensions
+    let finalWidth = 1280;
+    let finalHeight = 720;
+    if (aspectRatio === 'custom' && customWidth && customHeight) {
+      finalWidth = Math.min(2560, Math.max(100, customWidth));
+      finalHeight = Math.min(2560, Math.max(100, customHeight));
+    } else if (ASPECT_RATIOS[aspectRatio as keyof typeof ASPECT_RATIOS]) {
+      finalWidth = ASPECT_RATIOS[aspectRatio as keyof typeof ASPECT_RATIOS].w;
+      finalHeight = ASPECT_RATIOS[aspectRatio as keyof typeof ASPECT_RATIOS].h;
+    }
 
     let imageBase64: string;
     let provider: string;
@@ -169,8 +198,16 @@ export async function POST(request: Request) {
       }
     }
 
-    // Generate image with Pollinations (free, reliable, high quality)
-    imageBase64 = await generateWithPollinations(finalPrompt);
+    // Smart upscaling: cap at 2048 on either side
+    let apiWidth = finalWidth;
+    let apiHeight = finalHeight;
+    if (finalWidth > 2048 || finalHeight > 2048) {
+      const scale = Math.min(2048 / finalWidth, 2048 / finalHeight);
+      apiWidth = Math.floor(finalWidth * scale);
+      apiHeight = Math.floor(finalHeight * scale);
+    }
+
+    imageBase64 = await generateWithPollinations(finalPrompt, apiWidth, apiHeight);
     provider = 'Pollinations' + providerSuffix;
 
     return NextResponse.json({
@@ -179,6 +216,8 @@ export async function POST(request: Request) {
       prompt,
       preset,
       provider,
+      dimensions: { width: finalWidth, height: finalHeight },
+      upscaled: apiWidth !== finalWidth || apiHeight !== finalHeight,
     });
 
   } catch (err: any) {

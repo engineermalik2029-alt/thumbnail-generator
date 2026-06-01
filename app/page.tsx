@@ -51,6 +51,24 @@ const EXPORT_SIZES = [
   { id: '4k', label: '4K', w: 2560, h: 1440 },
 ];
 
+const ASPECT_RATIOS = [
+  { id: 'yt', label: 'YouTube Thumbnail 16:9', w: 1280, h: 720, icon: '📺' },
+  { id: 'ig_square', label: 'Instagram Square 1:1', w: 1080, h: 1080, icon: '📸' },
+  { id: 'ig_story', label: 'Instagram Story 9:16', w: 1080, h: 1920, icon: '📱' },
+  { id: 'tiktok', label: 'TikTok/Shorts 9:16', w: 1080, h: 1920, icon: '🎵' },
+  { id: 'twitter_card', label: 'Twitter Card 16:9', w: 1280, h: 720, icon: '🐦' },
+  { id: 'facebook', label: 'Facebook 1.91:1', w: 1200, h: 630, icon: '👥' },
+  { id: 'linkedin', label: 'LinkedIn Banner 4:1', w: 1584, h: 396, icon: '💼' },
+  { id: 'pinterest', label: 'Pinterest Pin 2:3', w: 1000, h: 1500, icon: '📌' },
+  { id: 'whatsapp', label: 'WhatsApp Status 9:16', w: 1080, h: 1920, icon: '💬' },
+  { id: 'snapchat', label: 'Snapchat 9:16', w: 1080, h: 1920, icon: '👻' },
+  { id: 'yt_shorts', label: 'YouTube Shorts 9:16', w: 1080, h: 1920, icon: '🎬' },
+  { id: 'twitter_post', label: 'Twitter Post 16:9', w: 1280, h: 720, icon: '🐦' },
+  { id: 'ultra_wide', label: 'ULTRA WIDE 21:9', w: 2560, h: 1080, icon: '🖥️' },
+  { id: 'cinema', label: 'CINEMA 2.39:1', w: 2560, h: 1072, icon: '🎬' },
+  { id: 'banner', label: 'BANNER 3:1', w: 1920, h: 640, icon: '🎨' },
+];
+
 function getUsageStats(): { today: number; allTime: number; date: string } {
   if (typeof window === 'undefined') return { today: 0, allTime: 0, date: '' };
   const today = new Date().toISOString().split('T')[0];
@@ -296,6 +314,9 @@ export default function Home() {
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
   const [geminiKey, setGeminiKey] = useState('');
   const [provider, setProvider] = useState('');
+  const [aspectRatio, setAspectRatio] = useState('yt');
+  const [customWidth, setCustomWidth] = useState(1280);
+  const [customHeight, setCustomHeight] = useState(720);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
 
@@ -344,7 +365,7 @@ export default function Home() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim(), subjectDescription: subjectDesc.trim(), overlayText: overlayText.trim(), preset, intensity, geminiApiKey: geminiKey }),
+        body: JSON.stringify({ topic: topic.trim(), subjectDescription: subjectDesc.trim(), overlayText: overlayText.trim(), preset, intensity, geminiApiKey: geminiKey, aspectRatio, customWidth, customHeight }),
       });
       const data = (await res.json()) as GenerateResponse;
       if (!res.ok) throw new Error(data.error || 'Generation failed');
@@ -520,6 +541,36 @@ export default function Home() {
                   onChange={(e) => setIntensity(Number(e.target.value))}
                   style={{ width: '100%', accentColor: '#ff0033' }} />
               </div>
+
+              <div className="form-group">
+                <label className="form-label">Aspect Ratio</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">📐</span>
+                  <select className="input-field" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
+                    {ASPECT_RATIOS.map(ar => (
+                      <option key={ar.id} value={ar.id}>{ar.icon} {ar.label} ({ar.w}x{ar.h})</option>
+                    ))}
+                    <option value="custom">🔧 Custom (enter your own size)</option>
+                  </select>
+                </div>
+              </div>
+
+              {aspectRatio === 'custom' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Width</label>
+                    <input type="number" min={100} max={2560} value={customWidth}
+                      onChange={(e) => setCustomWidth(Number(e.target.value))} className="input-field"
+                      style={{ paddingLeft: '1rem' }} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Height</label>
+                    <input type="number" min={100} max={2560} value={customHeight}
+                      onChange={(e) => setCustomHeight(Number(e.target.value))} className="input-field"
+                      style={{ paddingLeft: '1rem' }} />
+                  </div>
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Google Gemini API Key (optional)</label>

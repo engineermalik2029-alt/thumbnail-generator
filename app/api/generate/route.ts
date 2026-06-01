@@ -54,11 +54,12 @@ function buildThumbnailPrompt(params: {
   return `${cleanSubject}, extremely expressive face reacting to ${cleanTopic}, shocked amazed excited, face fills 40-50 percent of frame, centered. Background elements: ${topicVisual}. ${intensityDesc} energy. Style: ${p}. Sharp focus, vibrant saturated colors, clean composition, professional youtube thumbnail, 16:9 ratio. No text no words no letters no watermarks.`;
 }
 
-// Available Gemini models that support image generation (tried in order)
+// Available Gemini models (tried in order)
+// User's models: gemini-2.0-flash, gemini-2.0-flash-lite, gemini-2.0-flash-thinking-exp, gemini-embedding
 const GEMINI_MODELS = [
-  'gemini-2.5-flash-image',
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.0-flash-exp',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.0-flash-thinking-exp',
 ];
 
 // Generate image using Google Gemini API

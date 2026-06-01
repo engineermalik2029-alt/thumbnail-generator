@@ -62,41 +62,34 @@ const GEMINI_MODELS = [
   'gemini-2.0-flash-thinking-exp',
 ];
 
-// Generate image using Google Gemini API
-async function generateWithGemini(prompt: string, apiKey: string): Promise<string> {
-  const geminiPrompt = `Generate a YouTube thumbnail image based on this description: ${prompt}. The image should be 1920x1080, high quality, vibrant colors, professional look, suitable for a YouTube thumbnail.`;
+// Use Gemini as a prompt enhancer — creates detailed, topic-specific descriptions
+async function enhancePromptWithGemini(prompt: string, apiKey: string): Promise<string> {
+  const enhancerPrompt = `You are a YouTube thumbnail expert. Given this basic description: "${prompt}"
+  
+Create a detailed, vivid image generation prompt (200 words max) for a professional YouTube thumbnail. The prompt should describe:
+1. A specific person with a clear, exaggerated facial expression (shocked, amazed, excited)
+2. Their exact clothing, hair, and posture
+3. Background elements that directly relate to the topic
+4. Lighting, colors, and style that would get millions of clicks
+5. NO text, NO words, NO letters in the image
+
+Output ONLY the prompt description, nothing else. Max 200 words.`;
 
   const body = JSON.stringify({
-    contents: [{ parts: [{ text: geminiPrompt }] }],
+    contents: [{ parts: [{ text: enhancerPrompt }] }],
     generationConfig: {
-      responseModalities: ['IMAGE', 'TEXT'],
+      maxOutputTokens: 500,
+      temperature: 0.8,
     },
   });
 
-  // Try each model in order until one works
-  for (const modelName of GEMINI_MODELS) {
-    try {
-      const result = await tryGeminiModel(modelName, body, apiKey);
-      return result;
-    } catch (e: any) {
-      // If this is not a "model not found" error, it's a real API error
-      if (!e.message.includes('not found') && !e.message.includes('not supported')) {
-        throw e;
-      }
-      // Otherwise try next model
-    }
-  }
-  throw new Error('No available Gemini model found for image generation');
-}
-
-async function tryGeminiModel(modelName: string, body: string, apiKey: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-      timeout: 120000,
+      timeout: 30000,
     }, (res) => {
       let data = '';
       res.on('data', (c) => data += c);
@@ -107,19 +100,17 @@ async function tryGeminiModel(modelName: string, body: string, apiKey: string): 
             reject(new Error(json.error.message || 'Gemini API error'));
             return;
           }
-          // Extract image from response
           const candidates = json.candidates || [];
           for (const candidate of candidates) {
             const parts = candidate.content?.parts || [];
             for (const part of parts) {
-              if (part.inlineData?.data) {
-                const mimeType = part.inlineData.mimeType || 'image/png';
-                resolve(`data:${mimeType};base64,${part.inlineData.data}`);
+              if (part.text) {
+                resolve(part.text.trim());
                 return;
               }
             }
           }
-          reject(new Error('No image in Gemini response'));
+          reject(new Error('No text in Gemini response'));
         } catch (e: any) {
           reject(new Error('Failed to parse Gemini response: ' + e.message));
         }
@@ -164,20 +155,23 @@ export async function POST(request: Request) {
     let imageBase64: string;
     let provider: string;
 
-    // Use Gemini if real API key provided, otherwise use Pollinations (free)
+    let finalPrompt = prompt;
+    let providerSuffix = '';
+
+    // Use Gemini as prompt enhancer if key provided
     if (effectiveApiKey && effectiveApiKey.trim().length > 10 && !effectiveApiKey.includes('PASTE_YOUR')) {
       try {
-        imageBase64 = await generateWithGemini(prompt, effectiveApiKey.trim());
-        provider = 'gemini';
+        finalPrompt = await enhancePromptWithGemini(prompt, effectiveApiKey.trim());
+        providerSuffix = '+Gemini';
       } catch (geminiErr: any) {
-        console.warn('Gemini failed, falling back to Pollinations:', geminiErr.message);
-        imageBase64 = await generateWithPollinations(prompt);
-        provider = 'pollinations (Gemini unavailable: ' + geminiErr.message + ')';
+        console.warn('Gemini prompt enhancement failed:', geminiErr.message);
+        providerSuffix = ' (Gemini unavailable)';
       }
-    } else {
-      imageBase64 = await generateWithPollinations(prompt);
-      provider = 'pollinations';
     }
+
+    // Generate image with Pollinations (free, reliable, high quality)
+    imageBase64 = await generateWithPollinations(finalPrompt);
+    provider = 'Pollinations' + providerSuffix;
 
     return NextResponse.json({
       imageUrl: imageBase64,

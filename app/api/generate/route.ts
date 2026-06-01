@@ -4,7 +4,7 @@ import http from 'http';
 
 /**
  * YouTube Thumbnail Generator
- * Supports: Google Gemini 2.0 Flash (with API key) or Pollinations AI (free, no key)
+ * Supports: Google Gemini 2.5 Flash Image (with API key) or Pollinations AI (free, no key)
  * Proxies image through server to avoid CORS issues
  */
 
@@ -53,9 +53,9 @@ function buildThumbnailPrompt(params: {
   return `${cleanSubject}, extremely expressive face reacting to ${cleanTopic}, shocked amazed excited, face fills 40-50 percent of frame, centered. Background elements: ${topicVisual}. ${intensityDesc} energy. Style: ${p}. Sharp focus, vibrant saturated colors, clean composition, professional youtube thumbnail, 16:9 ratio. No text no words no letters no watermarks.`;
 }
 
-// Generate image using Google Gemini 2.0 Flash API
+// Generate image using Google Gemini 2.5 Flash Image API
 async function generateWithGemini(prompt: string, apiKey: string): Promise<string> {
-  const geminiPrompt = `Generate a YouTube thumbnail image based on this description: ${prompt}. The image should be 1920x1080, high quality, vibrant colors, professional look.`;
+  const geminiPrompt = `Generate a YouTube thumbnail image based on this description: ${prompt}. The image should be 1920x1080, high quality, vibrant colors, professional look, suitable for a YouTube thumbnail.`;
 
   const body = JSON.stringify({
     contents: [{ parts: [{ text: geminiPrompt }] }],
@@ -67,7 +67,7 @@ async function generateWithGemini(prompt: string, apiKey: string): Promise<strin
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
       timeout: 120000,
@@ -118,6 +118,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { topic, subjectDescription, preset = 'harry', intensity = 85, geminiApiKey = '' } = body;
+    // Check environment variable as fallback (set in .env.local or system environment)
+    const envApiKey = process.env.GEMINI_API_KEY || '';
+    const effectiveApiKey = geminiApiKey || envApiKey;
 
     if (!topic) {
       return NextResponse.json({ error: 'Video topic is required' }, { status: 400 });
@@ -136,8 +139,8 @@ export async function POST(request: Request) {
     let provider: string;
 
     // Use Gemini if API key provided, otherwise use Pollinations (free)
-    if (geminiApiKey && geminiApiKey.trim().length > 10) {
-      imageBase64 = await generateWithGemini(prompt, geminiApiKey.trim());
+    if (effectiveApiKey && effectiveApiKey.trim().length > 10) {
+      imageBase64 = await generateWithGemini(prompt, effectiveApiKey.trim());
       provider = 'gemini';
     } else {
       imageBase64 = await generateWithPollinations(prompt);

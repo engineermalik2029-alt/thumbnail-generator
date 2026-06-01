@@ -435,28 +435,27 @@ export default function Home() {
   const usagePercent = Math.round((usageToday / DAILY_LIMIT) * 100);
 
   return (
-    <div className="main-container">
-      <nav className="nav">
-        <a href="/" className="nav-logo">
-          <div className="nav-logo-icon">🎬</div>
-          <span className="nav-logo-text">Thumbnail<span>Forge</span></span>
+    <div className="app">
+      <div className="bg-mesh" />
+      <div className="bg-grid" />
+
+      <header className="header">
+        <a href="/" className="logo">
+          <div className="logo-mark">🎬</div>
+          <div className="logo-text">Thumbnail<span>Forge</span></div>
         </a>
-        <div className="nav-actions">
-          <span className="nav-badge"><span className="dot" style={{ width: 5, height: 5, borderRadius: '50%', background: '#00e676' }} /> Free Forever</span>
+        <div className="header-actions">
+          <div className="badge"><span className="badge-dot" /> FREE FOREVER</div>
         </div>
-      </nav>
+      </header>
 
       <section className="hero">
-        <div className="hero-badge"><span className="dot" /> YouTube Thumbnail Generator</div>
-        <h1 className="hero-title">
-          <span className="gradient-text">Pro YouTube Thumbnails with AI</span>
-        </h1>
-        <p className="hero-subtitle">
-          AI generates unique subjects per topic — then we add bold text, color grading, and cinematic effects. Every thumbnail is different.
-        </p>
+        <div className="hero-tag"><span className="pulse" /> YouTube Thumbnail Generator</div>
+        <h1>Pro YouTube Thumbnails<br /><span className="gradient">with AI</span></h1>
+        <p>AI generates unique subjects per topic — then we add bold text, color grading, and cinematic effects. Every thumbnail is different.</p>
       </section>
 
-      <section id="generator" className="grid-2">
+      <section className="grid">
         <div className="card">
           <div className="tabs">
             <button className={`tab ${activeTab === 'generate' ? 'active' : ''}`} onClick={() => setActiveTab('generate')}>🎬 Generate</button>
@@ -465,12 +464,12 @@ export default function Home() {
 
           {activeTab === 'generate' ? (
             <>
-              <div className="form-group">
-                <label className="form-label">Video Topic *</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">🎬</span>
+              <div className="field">
+                <label className="field-label">Video Topic *</label>
+                <div className="field-wrap">
+                  <span className="field-icon">🎬</span>
                   <input type="text" placeholder="e.g. Python Tutorial, Gaming Montage, AI Revolution"
-                    value={topic} onChange={(e) => setTopic(e.target.value)} className="input-field" />
+                    value={topic} onChange={(e) => setTopic(e.target.value)} className="field-input" />
                 </div>
               </div>
 

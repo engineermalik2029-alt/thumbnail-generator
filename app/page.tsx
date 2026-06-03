@@ -110,67 +110,6 @@ function removeFromGallery(id: string) {
 
 // ========== CANVAS DRAWING ==========
 
-function drawVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const gradient = ctx.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.7);
-  gradient.addColorStop(0, 'rgba(0,0,0,0)');
-  gradient.addColorStop(1, 'rgba(0,0,0,0.55)');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, w, h);
-}
-
-function applySharpen(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-  const output = new Uint8ClampedArray(data);
-  const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
-  for (let y = 1; y < h - 1; y++) {
-    for (let x = 1; x < w - 1; x++) {
-      const idx = (y * w + x) * 4;
-      for (let c = 0; c < 3; c++) {
-        let val = 0;
-        for (let ky = -1; ky <= 1; ky++) {
-          for (let kx = -1; kx <= 1; kx++) {
-            val += data[((y + ky) * w + (x + kx)) * 4 + c] * kernel[(ky + 1) * 3 + (kx + 1)];
-          }
-        }
-        output[idx + c] = Math.min(255, Math.max(0, val));
-      }
-    }
-  }
-  ctx.putImageData(new ImageData(output, w, h), 0, 0);
-}
-
-function applyColorGrading(ctx: CanvasRenderingContext2D, w: number, h: number, preset: string) {
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const data = imageData.data;
-  // Gentle contrast and saturation — keeps image clear while making it pop
-  const contrast = 1.15;
-  const saturation = 1.25;
-  const tints: Record<string, number[]> = {
-    harry: [0.01, 0.005, -0.015], tech: [-0.01, 0.0, 0.02],
-    gaming: [0.015, -0.005, -0.015], cinematic: [0.015, 0.0, -0.01],
-    neon: [0.01, -0.01, 0.02], minimal: [0, 0, 0],
-  };
-  const tint = tints[preset] || [0, 0, 0];
-  for (let i = 0; i < data.length; i += 4) {
-    let r = data[i], g = data[i + 1], b = data[i + 2];
-    r = Math.min(255, Math.max(0, (r - 128) * contrast + 128));
-    g = Math.min(255, Math.max(0, (g - 128) * contrast + 128));
-    b = Math.min(255, Math.max(0, (b - 128) * contrast + 128));
-    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-    r = Math.min(255, Math.max(0, gray + (r - gray) * saturation));
-    g = Math.min(255, Math.max(0, gray + (g - gray) * saturation));
-    b = Math.min(255, Math.max(0, gray + (b - gray) * saturation));
-    r = Math.min(255, Math.max(0, r + tint[0] * 255));
-    g = Math.min(255, Math.max(0, g + tint[1] * 255));
-    b = Math.min(255, Math.max(0, b + tint[2] * 255));
-    data[i] = r; data[i + 1] = g; data[i + 2] = b;
-  }
-  ctx.putImageData(imageData, 0, 0);
-  // Sharpen after color grading for crisp results
-  applySharpen(ctx, w, h);
-}
-
 function drawTextBar(ctx: CanvasRenderingContext2D, w: number, h: number, pos: string) {
   const barHeight = h * 0.22;
   let y: number;
@@ -345,7 +284,6 @@ export default function Home() {
     if (!ctx) return;
     ctx.clearRect(0, 0, 1920, 1080);
     if (bgImageRef.current) {
-      // Draw raw AI image at full quality — no filters that degrade clarity
       ctx.drawImage(bgImageRef.current, 0, 0, 1920, 1080);
     }
     const displayText = (overlayText || topic).toUpperCase();
@@ -373,13 +311,39 @@ export default function Home() {
         const img = await loadImage(data.imageUrl);
         bgImageRef.current = img;
         setImageUrl(data.imageUrl);
-      setPromptText(data.prompt || '');
-      setProvider(data.provider || 'pollinations');
-        renderCanvas();
+        setPromptText(data.prompt || '');
+        setProvider(data.provider || 'pollinations');
+        
+        // Client-side smart upscaling for dimensions > 2048
+        const dims = data as any;
+        if (dims.dimensions && (dims.dimensions.width > 2048 || dims.dimensions.height > 2048)) {
+          const finalW = dims.dimensions.width;
+          const finalH = dims.dimensions.height;
+          const upCanvas = document.createElement('canvas');
+          upCanvas.width = finalW;
+          upCanvas.height = finalH;
+          const upCtx = upCanvas.getContext('2d');
+          if (upCtx) {
+            upCtx.imageSmoothingEnabled = true;
+            upCtx.imageSmoothingQuality = 'high';
+            upCtx.drawImage(img, 0, 0, finalW, finalH);
+            setImageUrl(upCanvas.toDataURL('image/png'));
+            setProvider(prev => prev + ' (AI Upscaled)');
+            const upImg = new Image();
+            upImg.onload = () => {
+              bgImageRef.current = upImg;
+              renderCanvas();
+            };
+            upImg.src = upCanvas.toDataURL('image/png');
+          }
+        } else {
+          renderCanvas();
+        }
+        
         incrementUsage();
         refreshUsage();
-        const item: GalleryItem = { id: Date.now().toString(), imageUrl: data.imageUrl, topic: topic.trim(), preset, timestamp: Date.now() };
-        addToGallery(item);
+        const gi: GalleryItem = { id: Date.now().toString(), imageUrl: dims.dimensions?.width > 2048 ? (canvasRef.current?.toDataURL('image/png') || data.imageUrl) : data.imageUrl, topic: topic.trim(), preset, timestamp: Date.now() };
+        addToGallery(gi);
         setGallery(getGallery());
       }
     } catch (e: any) {
@@ -392,15 +356,15 @@ export default function Home() {
   function handleDownload() {
     if (!canvasRef.current) return;
     const size = EXPORT_SIZES.find(s => s.id === exportSize) || EXPORT_SIZES[0];
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = size.w;
-    tempCanvas.height = size.h;
-    const ctx = tempCanvas.getContext('2d');
+    const tmp = document.createElement('canvas');
+    tmp.width = size.w;
+    tmp.height = size.h;
+    const ctx = tmp.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(canvasRef.current, 0, 0, size.w, size.h);
     showToastMsg(`Downloading ${size.label} (${size.w}x${size.h})...`);
     const a = document.createElement('a');
-    a.href = tempCanvas.toDataURL('image/png');
+    a.href = tmp.toDataURL('image/png');
     a.download = `${(overlayText || topic).replace(/\s+/g, '_').toUpperCase()}_${size.label}.png`;
     document.body.appendChild(a);
     a.click();
@@ -423,12 +387,6 @@ export default function Home() {
     removeFromGallery(id);
     setGallery(getGallery());
     showToastMsg('Removed from gallery');
-  }
-
-  function handleResetCounter() {
-    localStorage.setItem(USAGE_KEY, '0');
-    refreshUsage();
-    showToastMsg('Counter reset');
   }
 
   const remaining = DAILY_LIMIT - usageToday;
@@ -473,39 +431,39 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Subject Description</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">🧑</span>
+              <div className="field">
+                <label className="field-label">Subject Description</label>
+                <div className="field-wrap">
+                  <span className="field-icon">🧑</span>
                   <input type="text" placeholder="e.g. shocked young man in hoodie"
-                    value={subjectDesc} onChange={(e) => setSubjectDesc(e.target.value)} className="input-field" />
+                    value={subjectDesc} onChange={(e) => setSubjectDesc(e.target.value)} className="field-input" />
                 </div>
                 <div className="chips" style={{ marginTop: '0.25rem' }}>
                   {SUBJECTS.map((s, i) => (
                     <button key={i} className={`chip ${subjectDesc === s ? 'active' : ''}`}
-                      onClick={() => setSubjectDesc(s)} style={{ fontSize: '0.6rem' }}>{s.slice(0, 20)}..</button>
+                      onClick={() => setSubjectDesc(s)}>{s.slice(0, 25)}..</button>
                   ))}
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Text Overlay</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">📝</span>
+              <div className="field">
+                <label className="field-label">Text Overlay</label>
+                <div className="field-wrap">
+                  <span className="field-icon">📝</span>
                   <input type="text" placeholder="e.g. DON'T DO THIS (blank = topic)"
-                    value={overlayText} onChange={(e) => setOverlayText(e.target.value)} className="input-field" />
+                    value={overlayText} onChange={(e) => setOverlayText(e.target.value)} className="field-input" />
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Style Preset</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+              <div className="field">
+                <label className="field-label">Style Preset</label>
+                <div className="preset-grid">
                   {PRESETS.map((p) => (
-                    <div key={p.id} className={`preset-card ${preset === p.id ? 'active' : ''}`}
+                    <div key={p.id} className={`preset ${preset === p.id ? 'active' : ''}`}
                       onClick={() => setPreset(p.id)}>
                       <div className="preset-name">{p.label}</div>
                       <div className="preset-desc">{p.desc}</div>
-                      <div className="preset-colors">
+                      <div className="preset-swatches">
                         {p.colors.map((c, i) => (<div key={i} className="preset-swatch" style={{ background: c }} />))}
                       </div>
                     </div>
@@ -514,8 +472,8 @@ export default function Home() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Text Position</label>
+                <div className="field">
+                  <label className="field-label">Text Position</label>
                   <div className="chips">
                     {['bottom', 'top', 'center'].map((p) => (
                       <button key={p} className={`chip ${textPos === p ? 'active' : ''}`} onClick={() => setTextPos(p)}>
@@ -524,8 +482,8 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Arrow</label>
+                <div className="field">
+                  <label className="field-label">Arrow</label>
                   <div className="chips">
                     <button className={`chip ${showArrow ? 'active' : ''}`} onClick={() => setShowArrow(!showArrow)}>
                       {showArrow ? '✓ Arrow ON' : '✗ Arrow OFF'}
@@ -534,11 +492,11 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Intensity: {intensity}%</label>
+              <div className="field">
+                <label className="field-label">Intensity: {intensity}%</label>
                 <input type="range" min="0" max="100" value={intensity}
                   onChange={(e) => setIntensity(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#ff0033' }} />
+                  style={{ width: '100%', accentColor: '#6366f1' }} />
               </div>
 
               <details style={{ marginBottom: '0.875rem', cursor: 'pointer' }}>
@@ -546,11 +504,11 @@ export default function Home() {
                   ⚙️ Settings {aspectRatio !== 'yt' ? `(${ASPECT_RATIOS.find(a => a.id === aspectRatio)?.label || 'Custom'})` : ''}
                 </summary>
                 <div style={{ padding: '0.5rem 0' }}>
-                  <div className="form-group">
-                    <label className="form-label">Aspect Ratio</label>
-                    <div className="input-wrapper">
-                      <span className="input-icon">📐</span>
-                      <select className="input-field" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
+                  <div className="field">
+                    <label className="field-label">Aspect Ratio</label>
+                    <div className="field-wrap">
+                      <span className="field-icon">📐</span>
+                      <select className="field-select" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
                         {ASPECT_RATIOS.map(ar => (
                           <option key={ar.id} value={ar.id}>{ar.icon} {ar.label} ({ar.w}x{ar.h})</option>
                         ))}
@@ -561,50 +519,50 @@ export default function Home() {
 
                   {aspectRatio === 'custom' && (
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <div className="form-group">
-                        <label className="form-label">Width</label>
+                      <div className="field">
+                        <label className="field-label">Width</label>
                         <input type="number" min={100} max={2560} value={customWidth}
-                          onChange={(e) => setCustomWidth(Number(e.target.value))} className="input-field"
+                          onChange={(e) => setCustomWidth(Number(e.target.value))} className="field-input"
                           style={{ paddingLeft: '1rem' }} />
                       </div>
-                      <div className="form-group">
-                        <label className="form-label">Height</label>
+                      <div className="field">
+                        <label className="field-label">Height</label>
                         <input type="number" min={100} max={2560} value={customHeight}
-                          onChange={(e) => setCustomHeight(Number(e.target.value))} className="input-field"
+                          onChange={(e) => setCustomHeight(Number(e.target.value))} className="field-input"
                           style={{ paddingLeft: '1rem' }} />
                       </div>
                     </div>
                   )}
+
+                  <div className="field">
+                    <label className="field-label">🔑 Gemini API Key</label>
+                    <div className="field-wrap">
+                      <span className="field-icon">🔑</span>
+                      <input type="password" placeholder="Paste Gemini key for better quality (optional)"
+                        value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className="field-input" />
+                    </div>
+                    <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                      Get free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style={{ color: '#818cf8' }}>aistudio.google.com</a> — or leave blank for free Pollinations
+                    </div>
+                  </div>
                 </div>
               </details>
 
-              <div className="form-group">
-                <label className="form-label">Google Gemini API Key (optional)</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">🔑</span>
-                  <input type="password" placeholder="Paste Gemini key for better quality (optional)"
-                    value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className="input-field" />
-                </div>
-                <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                  Get free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style={{ color: '#00e5ff' }}>aistudio.google.com</a> — or leave blank for free Pollinations
-                </div>
-              </div>
-
-              <button onClick={handleGenerate} disabled={loading || !topic.trim()} className="btn btn-primary">
+              <button onClick={handleGenerate} disabled={loading || !topic.trim()} className="btn-primary">
                 {loading ? '⏳ Generating...' : geminiKey ? '🚀 Generate with Gemini' : '🚀 Generate with Pollinations'}
               </button>
 
               {loading && (
-                <div className="loading-container">
+                <div className="loading">
                   <div className="loading-text">🎨 AI creating your unique thumbnail...<br />This may take 10-30 seconds</div>
-                  <div className="loading-bar-container"><div className="loading-bar" /></div>
+                  <div className="loading-bar-outer"><div className="loading-bar-inner" /></div>
                 </div>
               )}
 
               {error && (
-                <div className="error-display">
-                  <span className="error-icon">⚠️</span>
-                  <span className="error-text">{error}</span>
+                <div className="error-box">
+                  <span className="icon">⚠️</span>
+                  <span className="msg">{error}</span>
                 </div>
               )}
             </>
@@ -617,14 +575,11 @@ export default function Home() {
                   <p style={{ fontSize: '0.75rem', marginTop: '0.25rem' }}>Generate your first thumbnail to see it here</p>
                 </div>
               ) : (
-                <div className="gallery-grid">
+                <div className="gallery">
                   {gallery.map((item) => (
                     <div key={item.id} className="gallery-item" onClick={() => handleLoadGalleryItem(item)}>
                       <img src={item.imageUrl} alt={item.topic} loading="lazy" />
                       <div className="gallery-item-label">{item.topic}</div>
-                      <div className="gallery-item-overlay">
-                        <button className="preview-btn" onClick={(e) => { e.stopPropagation(); handleDeleteGalleryItem(item.id); }}>🗑️</button>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -637,8 +592,7 @@ export default function Home() {
           <div className="card-header">
             <span className="card-title">Preview</span>
             <div style={{ display: 'flex', gap: '0.3rem' }}>
-              {imageUrl && <span style={{ fontSize: '0.6rem', color: provider === 'gemini' ? '#4285f4' : '#00e5ff', padding: '0.15rem 0.4rem', background: provider === 'gemini' ? 'rgba(66,133,244,0.1)' : 'rgba(0,229,255,0.1)', borderRadius: 4 }}>{provider === 'gemini' ? 'Gemini 2.0' : 'Pollinations'}</span>}
-              <span style={{ fontSize: '0.6rem', color: '#FFD700', padding: '0.15rem 0.4rem', background: 'rgba(255,215,0,0.1)', borderRadius: 4 }}>{PRESETS.find(p => p.id === preset)?.label}</span>
+              {imageUrl && <span className="badge" style={{ margin: 0, fontSize: '0.55rem', background: provider?.includes('Gemini') ? 'rgba(99,102,241,0.1)' : 'rgba(0,229,255,0.1)', borderColor: provider?.includes('Gemini') ? 'rgba(99,102,241,0.2)' : 'rgba(0,229,255,0.2)', color: provider?.includes('Gemini') ? '#818cf8' : '#00e5ff' }}>{provider?.includes('Gemini') ? '🧠 Gemini' : provider?.includes('Upscaled') ? '🚀 AI Upscaled' : '🎨 AI'}</span>}
             </div>
           </div>
 
@@ -651,49 +605,46 @@ export default function Home() {
           )}
 
           {imageUrl && (
-            <div className="preview-container" style={{ marginBottom: '0.75rem' }}>
+            <div className="preview-wrap" style={{ marginBottom: '0.75rem' }}>
               <canvas ref={canvasRef} width={1920} height={1080} className="preview-canvas" onMouseUp={renderCanvas} />
-              <div className="preview-overlay">
-                <div className="preview-actions">
-                  <button onClick={handleDownload} className="preview-btn">⬇ Download</button>
-                  <button onClick={renderCanvas} className="preview-btn">🔄 Refresh</button>
-                </div>
+              <div className="preview-bar">
+                <button onClick={handleDownload} className="btn-sm">⬇ Download</button>
+                <button onClick={renderCanvas} className="btn-sm">🔄 Refresh</button>
               </div>
             </div>
           )}
 
           {imageUrl && (
-            <div className="export-sizes">
+            <div className="exports">
               {EXPORT_SIZES.map(s => (
-                <div key={s.id} className={`export-size ${exportSize === s.id ? 'active' : ''}`}
+                <div key={s.id} className={`export-btn ${exportSize === s.id ? 'active' : ''}`}
                   onClick={() => setExportSize(s.id)}>
-                  {s.label}<br /><span style={{ opacity: 0.6 }}>{s.w}x{s.h}</span>
+                  {s.label}<span>{s.w}x{s.h}</span>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Usage Stats */}
-          <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: '0.75rem', marginTop: '0.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.9rem' }}>📊</span>
-              <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Statistics</span>
-              <span style={{ marginLeft: 'auto', fontSize: '0.6rem', color: 'var(--text-muted)', padding: '0.1rem 0.4rem', borderRadius: 100, background: 'rgba(255,255,255,0.05)' }}>Daily</span>
+          <div className="stats-panel">
+            <div className="stats-header">
+              <span>📊</span>
+              <span className="label">Statistics</span>
+              <span style={{ marginLeft: 'auto', fontSize: '0.55rem', color: 'var(--text-muted)', padding: '0.1rem 0.4rem', borderRadius: 100, background: 'rgba(255,255,255,0.05)' }}>Daily</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
               <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Today</span>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: remaining > 0 ? '#00e676' : '#ff1744' }}>{usageToday} / {DAILY_LIMIT}</span>
+              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: remaining > 0 ? '#22c55e' : '#ef4444' }}>{usageToday} / {DAILY_LIMIT}</span>
             </div>
-            <div className="usage-bar">
-              <div className="usage-fill" style={{ width: usagePercent + '%', background: remaining > 50 ? 'linear-gradient(90deg, #00e676, #00c853)' : remaining > 10 ? 'linear-gradient(90deg, #ffd700, #ff9100)' : 'linear-gradient(90deg, #ff9100, #ff1744)' }} />
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: usagePercent + '%', background: usagePercent > 50 ? 'linear-gradient(90deg, #22c55e, #16a34a)' : usagePercent > 10 ? 'linear-gradient(90deg, #eab308, #f59e0b)' : 'linear-gradient(90deg, #f59e0b, #ef4444)' }} />
             </div>
-            <div className="stats-row" style={{ marginTop: '0.5rem' }}>
-              <div className="stat-card">
-                <div className="stat-value" style={{ color: '#00e676' }}>{Math.max(0, remaining)}</div>
+            <div className="stats-row">
+              <div className="stat">
+                <div className="stat-value" style={{ color: '#22c55e' }}>{Math.max(0, remaining)}</div>
                 <div className="stat-label">Remaining</div>
               </div>
-              <div className="stat-card">
-                <div className="stat-value" style={{ color: '#6c63ff' }}>{usageAllTime}</div>
+              <div className="stat">
+                <div className="stat-value" style={{ color: '#818cf8' }}>{usageAllTime}</div>
                 <div className="stat-label">All Time</div>
               </div>
             </div>
@@ -702,7 +653,7 @@ export default function Home() {
           {promptText && (
             <div className="prompt-box">
               <details>
-                <summary style={{ fontSize: '0.65rem', color: 'var(--text-muted)', cursor: 'pointer' }}>View AI Prompt</summary>
+                <summary>View AI Prompt</summary>
                 <pre>{promptText}</pre>
               </details>
             </div>
@@ -710,37 +661,36 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features Section */}
       <section className="features">
-        <div className="feature-card">
-          <div className="feature-icon">🎨</div>
-          <div className="feature-title">AI-Powered</div>
-          <div className="feature-desc">Every thumbnail is unique — AI generates different visuals for each topic</div>
+        <div className="feature">
+          <div className="icon">🎨</div>
+          <h3>AI-Powered</h3>
+          <p>Every thumbnail is unique — AI generates different visuals for each topic</p>
         </div>
-        <div className="feature-card">
-          <div className="feature-icon">⚡</div>
-          <div className="feature-title">Instant</div>
-          <div className="feature-desc">Generate pro thumbnails in seconds, not hours</div>
+        <div className="feature">
+          <div className="icon">⚡</div>
+          <h3>Instant</h3>
+          <p>Generate pro thumbnails in seconds, not hours</p>
         </div>
-        <div className="feature-card">
-          <div className="feature-icon">💰</div>
-          <div className="feature-title">100% Free</div>
-          <div className="feature-desc">No API key, no signup, no limits — completely free forever</div>
+        <div className="feature">
+          <div className="icon">💰</div>
+          <h3>100% Free</h3>
+          <p>No API key, no signup, no limits — completely free forever</p>
         </div>
-        <div className="feature-card">
-          <div className="feature-icon">🎯</div>
-          <div className="feature-title">Topic-Aware</div>
-          <div className="feature-desc">Detects your topic and adds matching visual elements</div>
+        <div className="feature">
+          <div className="icon">🎯</div>
+          <h3>Topic-Aware</h3>
+          <p>Detects your topic and adds matching visual elements</p>
         </div>
-        <div className="feature-card">
-          <div className="feature-icon">📱</div>
-          <div className="feature-title">Multi-Export</div>
-          <div className="feature-desc">YouTube, Instagram, Twitter/X, 4K — export in any size</div>
+        <div className="feature">
+          <div className="icon">📱</div>
+          <h3>16 Aspect Ratios</h3>
+          <p>YouTube, Instagram, TikTok, Twitter, Facebook, LinkedIn, Pinterest + Ultra Wide, Cinema, Banner & Custom</p>
         </div>
-        <div className="feature-card">
-          <div className="feature-icon">🎬</div>
-          <div className="feature-title">Canvas Effects</div>
-          <div className="feature-desc">Color grading, vignette, bold text overlays, and arrows</div>
+        <div className="feature">
+          <div className="icon">🎬</div>
+          <h3>Canvas Overlay</h3>
+          <p>Bold text, color grading, vignette, and arrow overlays</p>
         </div>
       </section>
 
@@ -752,7 +702,7 @@ export default function Home() {
         </div>
       </footer>
 
-      <div className={`toast ${toast ? 'visible' : ''}`}>{toast}</div>
+      <div className={`toast ${toast ? 'show' : ''}`}>{toast}</div>
     </div>
   );
 }

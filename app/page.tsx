@@ -541,35 +541,42 @@ export default function Home() {
                   style={{ width: '100%', accentColor: '#ff0033' }} />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Aspect Ratio</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">📐</span>
-                  <select className="input-field" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
-                    {ASPECT_RATIOS.map(ar => (
-                      <option key={ar.id} value={ar.id}>{ar.icon} {ar.label} ({ar.w}x{ar.h})</option>
-                    ))}
-                    <option value="custom">🔧 Custom (enter your own size)</option>
-                  </select>
-                </div>
-              </div>
+              <details style={{ marginBottom: '0.875rem', cursor: 'pointer' }}>
+                <summary style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '0.35rem' }}>
+                  ⚙️ Settings {aspectRatio !== 'yt' ? `(${ASPECT_RATIOS.find(a => a.id === aspectRatio)?.label || 'Custom'})` : ''}
+                </summary>
+                <div style={{ padding: '0.5rem 0' }}>
+                  <div className="form-group">
+                    <label className="form-label">Aspect Ratio</label>
+                    <div className="input-wrapper">
+                      <span className="input-icon">📐</span>
+                      <select className="input-field" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
+                        {ASPECT_RATIOS.map(ar => (
+                          <option key={ar.id} value={ar.id}>{ar.icon} {ar.label} ({ar.w}x{ar.h})</option>
+                        ))}
+                        <option value="custom">🔧 Custom (enter your own size)</option>
+                      </select>
+                    </div>
+                  </div>
 
-              {aspectRatio === 'custom' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">Width</label>
-                    <input type="number" min={100} max={2560} value={customWidth}
-                      onChange={(e) => setCustomWidth(Number(e.target.value))} className="input-field"
-                      style={{ paddingLeft: '1rem' }} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Height</label>
-                    <input type="number" min={100} max={2560} value={customHeight}
-                      onChange={(e) => setCustomHeight(Number(e.target.value))} className="input-field"
-                      style={{ paddingLeft: '1rem' }} />
-                  </div>
+                  {aspectRatio === 'custom' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <div className="form-group">
+                        <label className="form-label">Width</label>
+                        <input type="number" min={100} max={2560} value={customWidth}
+                          onChange={(e) => setCustomWidth(Number(e.target.value))} className="input-field"
+                          style={{ paddingLeft: '1rem' }} />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Height</label>
+                        <input type="number" min={100} max={2560} value={customHeight}
+                          onChange={(e) => setCustomHeight(Number(e.target.value))} className="input-field"
+                          style={{ paddingLeft: '1rem' }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </details>
 
               <div className="form-group">
                 <label className="form-label">Google Gemini API Key (optional)</label>

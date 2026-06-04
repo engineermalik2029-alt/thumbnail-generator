@@ -504,37 +504,75 @@ export default function Home() {
                   ⚙️ Settings {aspectRatio !== 'yt' ? `(${ASPECT_RATIOS.find(a => a.id === aspectRatio)?.label || 'Custom'})` : ''}
                 </summary>
                 <div style={{ padding: '0.5rem 0' }}>
-                  <div className="field">
-                    <label className="field-label">Aspect Ratio</label>
-                    <div className="field-wrap">
-                      <span className="field-icon">📐</span>
-                      <select className="field-select" value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value)}>
-                        {ASPECT_RATIOS.map(ar => (
-                          <option key={ar.id} value={ar.id}>{ar.icon} {ar.label} ({ar.w}x{ar.h})</option>
-                        ))}
-                        <option value="custom">🔧 Custom (enter your own size)</option>
-                      </select>
+                  <label className="field-label" style={{ marginBottom: '0.25rem' }}>📐 Aspect Ratio</label>
+                  <div className="ratio-grid">
+                    <div className="ratio-category">Square</div>
+                    {ASPECT_RATIOS.filter(a => a.id === 'ig_square').map(ar => (
+                      <div key={ar.id} className={`ratio-card ${aspectRatio === ar.id ? 'active' : ''}`}
+                        onClick={() => setAspectRatio(ar.id)}>
+                        <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '22px', height: '22px' }} /></div>
+                        <div className="ratio-info"><div className="ratio-name">{ar.label}</div><div className="ratio-dims">{ar.w}×{ar.h}</div></div>
+                        <div className="ratio-icon">{ar.icon}</div>
+                      </div>
+                    ))}
+                    <div className="ratio-category">Social Video 9:16</div>
+                    {ASPECT_RATIOS.filter(a => ['ig_story','tiktok','whatsapp','snapchat','yt_shorts'].includes(a.id)).map(ar => (
+                      <div key={ar.id} className={`ratio-card ${aspectRatio === ar.id ? 'active' : ''}`}
+                        onClick={() => setAspectRatio(ar.id)}>
+                        <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '14px', height: '24px' }} /></div>
+                        <div className="ratio-info"><div className="ratio-name">{ar.label}</div><div className="ratio-dims">{ar.w}×{ar.h}</div></div>
+                        <div className="ratio-icon">{ar.icon}</div>
+                      </div>
+                    ))}
+                    <div className="ratio-category">Standard 16:9</div>
+                    {ASPECT_RATIOS.filter(a => ['yt','twitter_card','twitter_post'].includes(a.id)).map(ar => (
+                      <div key={ar.id} className={`ratio-card ${aspectRatio === ar.id ? 'active' : ''}`}
+                        onClick={() => setAspectRatio(ar.id)}>
+                        <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '24px', height: '14px' }} /></div>
+                        <div className="ratio-info"><div className="ratio-name">{ar.label}</div><div className="ratio-dims">{ar.w}×{ar.h}</div></div>
+                        <div className="ratio-icon">{ar.icon}</div>
+                      </div>
+                    ))}
+                    <div className="ratio-category">Custom & Special</div>
+                    {ASPECT_RATIOS.filter(a => ['facebook','linkedin','pinterest','ultra_wide','cinema','banner'].includes(a.id)).map(ar => (
+                      <div key={ar.id} className={`ratio-card ${aspectRatio === ar.id ? 'active' : ''}`}
+                        onClick={() => setAspectRatio(ar.id)}>
+                        {ar.id === 'ultra_wide' ? <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '28px', height: '12px' }} /></div> :
+                         ar.id === 'cinema' ? <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '28px', height: '11px' }} /></div> :
+                         ar.id === 'banner' ? <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '28px', height: '10px' }} /></div> :
+                         ar.id === 'linkedin' ? <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '28px', height: '7px' }} /></div> :
+                         ar.id === 'facebook' ? <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '24px', height: '13px' }} /></div> :
+                         <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '18px', height: '26px' }} /></div>}
+                        <div className="ratio-info"><div className="ratio-name">{ar.label}</div><div className="ratio-dims">{ar.w}×{ar.h}</div></div>
+                        <div className="ratio-icon">{ar.icon}</div>
+                      </div>
+                    ))}
+                    <div className={`ratio-card ${aspectRatio === 'custom' ? 'active' : ''}`}
+                      onClick={() => setAspectRatio('custom')}>
+                      <div className="ratio-visual"><div className="ratio-visual-inner" style={{ width: '20px', height: '20px', border: '2px dashed rgba(255,255,255,0.3)', background: 'transparent', boxShadow: 'none' }} /></div>
+                      <div className="ratio-info"><div className="ratio-name">Custom Size</div><div className="ratio-dims">Enter your own</div></div>
+                      <div className="ratio-icon">🔧</div>
                     </div>
                   </div>
 
                   {aspectRatio === 'custom' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <div className="field">
+                    <div className="ratio-custom">
+                      <div className="field" style={{ margin: 0 }}>
                         <label className="field-label">Width</label>
                         <input type="number" min={100} max={2560} value={customWidth}
                           onChange={(e) => setCustomWidth(Number(e.target.value))} className="field-input"
-                          style={{ paddingLeft: '1rem' }} />
+                          style={{ paddingLeft: '0.75rem' }} />
                       </div>
-                      <div className="field">
+                      <div className="field" style={{ margin: 0 }}>
                         <label className="field-label">Height</label>
                         <input type="number" min={100} max={2560} value={customHeight}
                           onChange={(e) => setCustomHeight(Number(e.target.value))} className="field-input"
-                          style={{ paddingLeft: '1rem' }} />
+                          style={{ paddingLeft: '0.75rem' }} />
                       </div>
                     </div>
                   )}
 
-                  <div className="field">
+                  <div className="field" style={{ marginTop: '0.75rem' }}>
                     <label className="field-label">🔑 Gemini API Key</label>
                     <div className="field-wrap">
                       <span className="field-icon">🔑</span>

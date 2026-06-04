@@ -256,6 +256,8 @@ export default function Home() {
   const [aspectRatio, setAspectRatio] = useState('yt');
   const [customWidth, setCustomWidth] = useState(1280);
   const [customHeight, setCustomHeight] = useState(720);
+  const [canvasWidth, setCanvasWidth] = useState(1920);
+  const [canvasHeight, setCanvasHeight] = useState(1080);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
 
@@ -282,15 +284,15 @@ export default function Home() {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, 1920, 1080);
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
     if (bgImageRef.current) {
-      ctx.drawImage(bgImageRef.current, 0, 0, 1920, 1080);
+      ctx.drawImage(bgImageRef.current, 0, 0, canvasWidth, canvasHeight);
     }
     const displayText = (overlayText || topic).toUpperCase();
-    drawTextBar(ctx, 1920, 1080, textPos);
-    drawBoldText(ctx, displayText, 1920, 1080, textPos);
-    if (showArrow) drawArrow(ctx, 1920, 1080);
-  }, [preset, overlayText, topic, textPos, showArrow]);
+    drawTextBar(ctx, canvasWidth, canvasHeight, textPos);
+    drawBoldText(ctx, displayText, canvasWidth, canvasHeight, textPos);
+    if (showArrow) drawArrow(ctx, canvasWidth, canvasHeight);
+  }, [preset, overlayText, topic, textPos, showArrow, canvasWidth, canvasHeight]);
 
   async function handleGenerate() {
     if (!topic.trim()) return;
@@ -314,11 +316,22 @@ export default function Home() {
         setPromptText(data.prompt || '');
         setProvider(data.provider || 'pollinations');
         
+        // Get response dimensions
+        const respData = data as any;
+        const respDims = respData.dimensions;
+        
+        // Set canvas dimensions from API response (scaled to fit preview)
+        if (respDims && respDims.width && respDims.height) {
+          const maxW = 800, maxH = 600;
+          const scale = Math.min(maxW / respDims.width, maxH / respDims.height);
+          setCanvasWidth(Math.floor(respDims.width * scale));
+          setCanvasHeight(Math.floor(respDims.height * scale));
+        }
+        
         // Client-side smart upscaling for dimensions > 2048
-        const dims = data as any;
-        if (dims.dimensions && (dims.dimensions.width > 2048 || dims.dimensions.height > 2048)) {
-          const finalW = dims.dimensions.width;
-          const finalH = dims.dimensions.height;
+        if (respDims && (respDims.width > 2048 || respDims.height > 2048)) {
+          const finalW = respDims.width;
+          const finalH = respDims.height;
           const upCanvas = document.createElement('canvas');
           upCanvas.width = finalW;
           upCanvas.height = finalH;
@@ -327,14 +340,15 @@ export default function Home() {
             upCtx.imageSmoothingEnabled = true;
             upCtx.imageSmoothingQuality = 'high';
             upCtx.drawImage(img, 0, 0, finalW, finalH);
-            setImageUrl(upCanvas.toDataURL('image/png'));
+            const upDataUrl = upCanvas.toDataURL('image/png');
+            setImageUrl(upDataUrl);
             setProvider(prev => prev + ' (AI Upscaled)');
             const upImg = new Image();
             upImg.onload = () => {
               bgImageRef.current = upImg;
               renderCanvas();
             };
-            upImg.src = upCanvas.toDataURL('image/png');
+            upImg.src = upDataUrl;
           }
         } else {
           renderCanvas();
@@ -342,7 +356,7 @@ export default function Home() {
         
         incrementUsage();
         refreshUsage();
-        const gi: GalleryItem = { id: Date.now().toString(), imageUrl: dims.dimensions?.width > 2048 ? (canvasRef.current?.toDataURL('image/png') || data.imageUrl) : data.imageUrl, topic: topic.trim(), preset, timestamp: Date.now() };
+        const gi: GalleryItem = { id: Date.now().toString(), imageUrl: data.imageUrl, topic: topic.trim(), preset, timestamp: Date.now() };
         addToGallery(gi);
         setGallery(getGallery());
       }

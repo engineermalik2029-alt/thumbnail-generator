@@ -256,10 +256,12 @@ export default function Home() {
   const [aspectRatio, setAspectRatio] = useState('yt');
   const [customWidth, setCustomWidth] = useState(1280);
   const [customHeight, setCustomHeight] = useState(720);
-  const [canvasWidth, setCanvasWidth] = useState(1920);
-  const [canvasHeight, setCanvasHeight] = useState(1080);
+  const [canvasWidth, setCanvasWidth] = useState(800);
+  const [canvasHeight, setCanvasHeight] = useState(450);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
+  // Use ref to keep synchronous dimensions for canvas rendering (avoids React async state delay)
+  const dimsRef = useRef({ w: 800, h: 450 });
 
   useEffect(() => {
     const stats = getUsageStats();
@@ -279,20 +281,26 @@ export default function Home() {
     setTimeout(() => setToast(''), 3000);
   }, []);
 
+  // Render canvas using ref dimensions (always up-to-date)
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    const w = dimsRef.current.w;
+    const h = dimsRef.current.h;
+    // Ensure canvas element dimensions match
+    canvas.width = w;
+    canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
     if (bgImageRef.current) {
-      ctx.drawImage(bgImageRef.current, 0, 0, canvasWidth, canvasHeight);
+      ctx.drawImage(bgImageRef.current, 0, 0, w, h);
     }
     const displayText = (overlayText || topic).toUpperCase();
-    drawTextBar(ctx, canvasWidth, canvasHeight, textPos);
-    drawBoldText(ctx, displayText, canvasWidth, canvasHeight, textPos);
-    if (showArrow) drawArrow(ctx, canvasWidth, canvasHeight);
-  }, [preset, overlayText, topic, textPos, showArrow, canvasWidth, canvasHeight]);
+    drawTextBar(ctx, w, h, textPos);
+    drawBoldText(ctx, displayText, w, h, textPos);
+    if (showArrow) drawArrow(ctx, w, h);
+  }, [preset, overlayText, topic, textPos, showArrow]);
 
   async function handleGenerate() {
     if (!topic.trim()) return;
@@ -324,8 +332,12 @@ export default function Home() {
         if (respDims && respDims.width && respDims.height) {
           const maxW = 800, maxH = 600;
           const scale = Math.min(maxW / respDims.width, maxH / respDims.height);
-          setCanvasWidth(Math.floor(respDims.width * scale));
-          setCanvasHeight(Math.floor(respDims.height * scale));
+          const scaledW = Math.floor(respDims.width * scale);
+          const scaledH = Math.floor(respDims.height * scale);
+          // Set both ref (for renderCanvas) and state (for <canvas> JSX attr)
+          dimsRef.current = { w: scaledW, h: scaledH };
+          setCanvasWidth(scaledW);
+          setCanvasHeight(scaledH);
         }
         
         // Client-side smart upscaling for dimensions > 2048

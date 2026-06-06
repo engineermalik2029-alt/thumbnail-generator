@@ -203,7 +203,7 @@ textarea.field-input { resize: vertical; min-height: 56px; }
 
 /* ===== PREVIEW ===== */
 .preview-wrap { position: relative; border-radius: var(--radius); overflow: hidden; }
-.preview-canvas { width: 100%; aspect-ratio: 16/9; display: block; border-radius: var(--radius-sm); }
+.preview-canvas { display: block; border-radius: var(--radius-sm); }
 .preview-bar {
   position: absolute; bottom: 0; left: 0; right: 0;
   background: linear-gradient(transparent, rgba(0,0,0,0.85));

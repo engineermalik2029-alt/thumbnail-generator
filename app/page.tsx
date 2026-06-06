@@ -658,7 +658,7 @@ export default function Home() {
 
           {imageUrl && (
             <div className="preview-wrap" style={{ marginBottom: '0.75rem' }}>
-              <canvas ref={canvasRef} width={1920} height={1080} className="preview-canvas" onMouseUp={renderCanvas} />
+              <canvas ref={canvasRef} width={canvasWidth} height={canvasHeight} className="preview-canvas" style={{ maxWidth: '100%', height: 'auto' }} onMouseUp={renderCanvas} />
               <div className="preview-bar">
                 <button onClick={handleDownload} className="btn-sm">⬇ Download</button>
                 <button onClick={renderCanvas} className="btn-sm">🔄 Refresh</button>

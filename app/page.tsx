@@ -256,11 +256,8 @@ export default function Home() {
   const [aspectRatio, setAspectRatio] = useState('yt');
   const [customWidth, setCustomWidth] = useState(1280);
   const [customHeight, setCustomHeight] = useState(720);
-  const [canvasWidth, setCanvasWidth] = useState(800);
-  const [canvasHeight, setCanvasHeight] = useState(450);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgImageRef = useRef<HTMLImageElement | null>(null);
-  // Use ref to keep synchronous dimensions for canvas rendering (avoids React async state delay)
   const dimsRef = useRef({ w: 800, h: 450 });
 
   useEffect(() => {
@@ -328,16 +325,15 @@ export default function Home() {
         const respData = data as any;
         const respDims = respData.dimensions;
         
-        // Set canvas dimensions from API response (scaled to fit preview)
+        // Set canvas dimensions from API response (scaled to fit preview) - use ref ONLY, not state
+        // (state triggers React re-render which destroys canvas content)
         if (respDims && respDims.width && respDims.height) {
           const maxW = 800, maxH = 600;
           const scale = Math.min(maxW / respDims.width, maxH / respDims.height);
-          const scaledW = Math.floor(respDims.width * scale);
-          const scaledH = Math.floor(respDims.height * scale);
-          // Set both ref (for renderCanvas) and state (for <canvas> JSX attr)
-          dimsRef.current = { w: scaledW, h: scaledH };
-          setCanvasWidth(scaledW);
-          setCanvasHeight(scaledH);
+          dimsRef.current = {
+            w: Math.floor(respDims.width * scale),
+            h: Math.floor(respDims.height * scale)
+          };
         }
         
         // Client-side smart upscaling for dimensions > 2048
@@ -670,7 +666,7 @@ export default function Home() {
 
           {imageUrl && (
             <div className="preview-wrap" style={{ marginBottom: '0.75rem' }}>
-              <canvas ref={canvasRef} width={canvasWidth} height={canvasHeight} className="preview-canvas" style={{ maxWidth: '100%', height: 'auto' }} onMouseUp={renderCanvas} />
+              <canvas ref={canvasRef} width={800} height={450} className="preview-canvas" style={{ maxWidth: '100%', height: 'auto' }} onMouseUp={renderCanvas} onLoad={renderCanvas} />
               <div className="preview-bar">
                 <button onClick={handleDownload} className="btn-sm">⬇ Download</button>
                 <button onClick={renderCanvas} className="btn-sm">🔄 Refresh</button>

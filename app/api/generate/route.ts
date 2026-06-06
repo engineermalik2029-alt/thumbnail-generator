@@ -14,6 +14,7 @@ function buildThumbnailPrompt(params: {
   subject: string;
   preset: string;
   intensity: number;
+  aspectRatio: string;
 }): string {
   const { topic, subject, preset, intensity } = params;
   const cleanTopic = topic.replace(/["""]/g, '').trim();
@@ -51,7 +52,16 @@ function buildThumbnailPrompt(params: {
 
   const p = presets[preset] || presets.harry;
 
-  return `${cleanSubject}, extremely expressive face reacting to ${cleanTopic}, shocked amazed excited, face fills 40-50 percent of frame, centered. Background elements: ${topicVisual}. ${intensityDesc} energy. Style: ${p}. Sharp focus, vibrant saturated colors, clean composition, professional youtube thumbnail, 16:9 ratio. No text no words no letters no watermarks.`;
+  const ratioHint = params.aspectRatio === 'ig_square' ? 'SQUARE 1:1 composition, perfectly centered' :
+    params.aspectRatio?.includes('ig_story') || params.aspectRatio?.includes('tiktok') || params.aspectRatio?.includes('whatsapp') || params.aspectRatio?.includes('snapchat') || params.aspectRatio?.includes('shorts') ? 'PORTRAIT 9:16 vertical composition, full-body or waist-up framing' :
+    params.aspectRatio === 'linkedin' ? 'EXTREME WIDE 4:1 banner composition, ultra wide landscape' :
+    params.aspectRatio === 'ultra_wide' ? 'ULTRA WIDE 21:9 cinematic composition, very wide panoramic' :
+    params.aspectRatio === 'cinema' ? 'CINEMATIC 2.39:1 anamorphic wide composition' :
+    params.aspectRatio === 'banner' ? 'WIDE BANNER 3:1 composition, wide horizontal layout' :
+    params.aspectRatio === 'facebook' ? 'WIDE 1.91:1 composition, slightly wider than 16:9' :
+    params.aspectRatio === 'pinterest' ? 'TALL PORTRAIT 2:3 pin-style composition, elegant vertical' :
+    '16:9 landscape widescreen composition';
+  return `${cleanSubject}, extremely expressive face reacting to ${cleanTopic}, shocked amazed excited, face fills 40-50 percent of frame, centered. Background elements: ${topicVisual}. ${intensityDesc} energy. Style: ${p}. Sharp focus, vibrant saturated colors, clean composition, professional thumbnail, ${ratioHint}. No text no words no letters no watermarks.`;
 }
 
 // Available Gemini models (tried in order)
@@ -166,6 +176,7 @@ export async function POST(request: Request) {
       subject: subjectDescription || '',
       preset,
       intensity,
+      aspectRatio,
     });
 
     const displayText = topic.toUpperCase();
